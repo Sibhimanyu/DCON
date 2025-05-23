@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Irrigation Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <style>
+  body {
+    background-color: #f4f6f9;
+    font-family: 'Inter', sans-serif;
+  }
+  h2 {
+    font-weight: 600;
+  }
+  .card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease-in-out;
+  }
+  .card:hover {
+    transform: translateY(-5px);
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+  }
+  .card-text {
+    font-size: 0.95rem;
+    color: #555;
+  }
+  .chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+  }
+  .nav-tabs .nav-link {
+    font-weight: 600;
+  }
+  </style>
+</head>
+<body>
+<div class="container py-4">
+  <h2 class="mb-4 text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard" type="button" role="tab">Dashboard</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="electricity-tab" data-bs-toggle="tab" data-bs-target="#electricity" type="button" role="tab">Electricity</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="pressure-tab" data-bs-toggle="tab" data-bs-target="#pressure" type="button" role="tab">Pressure</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="timers-tab" data-bs-toggle="tab" data-bs-target="#timers" type="button" role="tab">Timers</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="timer-history-tab" data-bs-toggle="tab" data-bs-target="#timer-history" type="button" role="tab">Timer History</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="pressure-timer-tab" data-bs-toggle="tab" data-bs-target="#pressure-timer" type="button" role="tab">Pressure by Timer</button>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content pt-3" id="dashboardTabsContent">
+    <div class="tab-pane fade show active animate__animated animate__fadeInUp" id="dashboard" role="tabpanel">
+      <!-- General Dashboard: display summary visuals, integrate electricity, pressure, and timer overview neatly here -->
+      <div id="dashboard-overview" class="row gy-3 mt-3"></div>
+      <div id="live-data" class="row gy-3 mt-3"></div>
+    </div>
+
+    <div class="tab-pane fade animate__animated animate__fadeInUp" id="electricity" role="tabpanel">
+      <!-- Electricity Readings and History Charts -->
+      <div class="row">
+        <div class="col-md-12 mb-4">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Voltage History</h5>
+              <div class="chart-container">
+                <canvas id="voltage-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-12">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Current History</h5>
+              <div class="chart-container">
+                <canvas id="current-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade animate__animated animate__fadeInUp" id="pressure" role="tabpanel">
+      <!-- Pressure input/output history charts and details -->
+      <div id="pressure-data" class="row gy-3 mt-3"></div>
+    </div>
+
+    <div class="tab-pane fade animate__animated animate__fadeInUp" id="timers" role="tabpanel">
+      <!-- Timer current and next schedule -->
+      <div class="row gy-3">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Current Timer</h5>
+              <p id="current-timer">Loading...</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Next Timer</h5>
+              <p id="next-timer">Loading...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade animate__animated animate__fadeInUp" id="timer-history" role="tabpanel">
+      <div id="timer-history-data" class="row gy-3 mt-3"></div>
+    </div>
+    <div class="tab-pane fade animate__animated animate__fadeInUp" id="pressure-timer" role="tabpanel">
+      <div id="pressure-by-timer" class="row gy-3 mt-3"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Firebase Config
+  const firebaseConfig = {
+    apiKey: "AIzaSyCzS6245V48Mb-q91qpjqK2l8o87MJ9Hho",
+    authDomain: "mobitech-c93c0.firebaseapp.com",
+    projectId: "mobitech-c93c0",
+    storageBucket: "mobitech-c93c0.appspot.com",
+    messagingSenderId: "284819435696",
+    appId: "1:284819435696:web:933fae6a22a0b05ecdcb75",
+    measurementId: "G-M1KEW3J26N"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  async function fetchLiveData() {
+    const liveContainer = document.getElementById('live-data');
+    const currentTimer = document.getElementById('current-timer');
+    const nextTimer = document.getElementById('next-timer');
+    liveContainer.innerHTML = '';
+    currentTimer.textContent = '';
+    nextTimer.textContent = '';
+
+    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data();
+      const live = data.summary.live_data;
+
+      Object.entries(live).forEach(([key, val]) => {
+        const col = document.createElement('div');
+        col.className = 'col-md-4';
+        col.innerHTML = `
+          <div class="card h-100">
+            <div class="card-body d-flex flex-column justify-content-center text-center">
+              <h5 class="card-title text-uppercase text-muted" style="font-size: 0.9rem;">${key.replace(/_/g, ' ')}</h5>
+              <p class="display-6 fw-semibold text-primary mb-0">${val}</p>
+            </div>
+          </div>`;
+        liveContainer.appendChild(col);
+      });
+
+      const timers = data.summary.timers;
+      // Progress bar for current timer
+      const currentTimerDuration = parseInt(timers.current.run_time) || 0;
+      const currentTimerRemaining = parseInt(timers.current.remaining_time) || 0;
+      const currentTimerProgress = currentTimerDuration > 0 ? Math.round(((currentTimerDuration - currentTimerRemaining) / currentTimerDuration) * 100) : 0;
+      currentTimer.innerHTML = `
+        <strong>${timers.current.name}</strong>
+        <div class="progress mt-2">
+          <div class="progress-bar" role="progressbar" style="width: ${currentTimerProgress}%;" aria-valuenow="${currentTimerProgress}" aria-valuemin="0" aria-valuemax="100">
+            ${currentTimerProgress}%
+          </div>
+        </div>
+        <small>${currentTimerRemaining} min remaining of ${currentTimerDuration} min</small>
+      `;
+      nextTimer.textContent = `${timers.next.name} (On Time: ${timers.next.on_time})`;
+      // Add entrance animation
+      liveContainer.classList.add('animate__animated', 'animate__fadeIn');
+    }
+  }
+
+  async function fetchHistory() {
+    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
+    const labels = [];
+    const volt1 = [], volt2 = [], volt3 = [], curr1 = [], curr2 = [], curr3 = [];
+
+    snapshot.forEach(doc => {
+      const data = doc.data().summary.live_data;
+      labels.push(doc.data().timestamp);
+      volt1.push(data.voltage_phase_1 || 0);
+      volt2.push(data.voltage_phase_2 || 0);
+      volt3.push(data.voltage_phase_3 || 0);
+      curr1.push(data.current_phase_1 || 0);
+      curr2.push(data.current_phase_2 || 0);
+      curr3.push(data.current_phase_3 || 0);
+    });
+
+    const voltageCtx = document.getElementById('voltage-chart').getContext('2d');
+    new Chart(voltageCtx, {
+      type: 'line',
+      data: {
+        labels: labels.reverse(),
+        datasets: [
+          { label: 'Phase 1', data: volt1.reverse(), borderColor: 'red' },
+          { label: 'Phase 2', data: volt2.reverse(), borderColor: 'blue' },
+          { label: 'Phase 3', data: volt3.reverse(), borderColor: 'green' }
+        ]
+      }
+    });
+
+    const currentCtx = document.getElementById('current-chart').getContext('2d');
+    new Chart(currentCtx, {
+      type: 'line',
+      data: {
+        labels: labels.reverse(),
+        datasets: [
+          { label: 'Phase 1', data: curr1.reverse(), borderColor: 'orange' },
+          { label: 'Phase 2', data: curr2.reverse(), borderColor: 'purple' },
+          { label: 'Phase 3', data: curr3.reverse(), borderColor: 'teal' }
+        ]
+      }
+    });
+  }
+
+  fetchLiveData();
+  fetchHistory();
+
+  // Dashboard Overview
+  async function populateDashboardOverview() {
+    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
+    if (!snapshot.empty) {
+      const data = snapshot.docs[0].data();
+      const live = data.summary.live_data;
+      const timers = data.summary.timers;
+
+      const dashboard = document.getElementById('dashboard-overview');
+      dashboard.innerHTML = '';
+
+      const items = [
+        { title: 'Voltage (V)', value: `${live.voltage_phase_1} / ${live.voltage_phase_2} / ${live.voltage_phase_3}` },
+        { title: 'Current (A)', value: `${live.current_phase_1} / ${live.current_phase_2} / ${live.current_phase_3}` },
+        { title: 'Pressure (In/Out)', value: `${live.pressure_in} / ${live.pressure_out}` },
+        { title: 'Electricity Status', value: live.electricity_status || 'Unknown' },
+        { title: 'Current Timer', value: `${timers.current.name} (${timers.current.remaining_time})` },
+        { title: 'Next Timer', value: `${timers.next.name} (${timers.next.on_time})` }
+      ];
+
+      items.forEach(item => {
+        const col = document.createElement('div');
+        col.className = 'col-md-4';
+        col.innerHTML = `
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title text-muted">${item.title}</h5>
+              <p class="display-6 fw-semibold text-primary mb-0">${item.value}</p>
+            </div>
+          </div>`;
+        dashboard.appendChild(col);
+      });
+
+      dashboard.classList.add('animate__animated', 'animate__fadeIn');
+    }
+  }
+
+  // Pressure History Chart
+  async function fetchPressureHistory() {
+    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
+    const labels = [], inputPressures = [], outputPressures = [];
+
+    snapshot.forEach(doc => {
+      const data = doc.data().summary.live_data;
+      labels.push(doc.data().timestamp);
+      inputPressures.push(data.pressure_in || 0);
+      outputPressures.push(data.pressure_out || 0);
+    });
+
+    const container = document.getElementById('pressure-data');
+    container.innerHTML = `
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Pressure History</h5>
+            <div class="chart-container">
+              <canvas id="pressure-chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    const pressureCtx = document.getElementById('pressure-chart').getContext('2d');
+    new Chart(pressureCtx, {
+      type: 'line',
+      data: {
+        labels: labels.reverse(),
+        datasets: [
+          { label: 'Input Pressure', data: inputPressures.reverse(), borderColor: 'navy' },
+          { label: 'Output Pressure', data: outputPressures.reverse(), borderColor: 'darkred' }
+        ]
+      }
+    });
+  }
+
+  // Timer History
+  async function fetchTimerHistory() {
+    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0])
+      .orderBy('timestamp', 'desc')
+      .limit(10000)
+      .get();
+
+    const container = document.getElementById('timer-history-data');
+    container.innerHTML = ''; // Clear any previous content
+
+    const seenTimers = new Set();
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const timers = data.summary.timers;
+
+      if (timers && timers.current && timers.current.name) {
+        const key = `${timers.current.name}-${timers.current.number}`;
+        if (!seenTimers.has(key)) {
+          seenTimers.add(key);
+
+          const col = document.createElement('div');
+          col.className = 'col-md-6';
+          col.innerHTML = `
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title">Timer History</h5>
+                <p><strong>Timer Name:</strong> ${timers.current.name}</p>
+                <p><strong>Run Time:</strong> ${timers.current.run_time} minutes</p>
+                <p><strong>Remaining Time:</strong> ${timers.current.remaining_time} minutes</p>
+                <p><strong>Completed:</strong> ${timers.current.completed ? 'Yes' : 'No'}</p>
+                <p><strong>Start Time:</strong> ${timers.current.start_time}</p>
+              </div>
+            </div>
+          `;
+          container.appendChild(col);
+        }
+      }
+    });
+  }
+
+  // Run on load
+  populateDashboardOverview();
+  fetchPressureHistory();
+  fetchTimerHistory();
+  // Pressure by Timer
+  async function fetchPressureByTimer() {
+    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0])
+      .orderBy('timestamp', 'asc')
+      .limit(500)
+      .get();
+
+    const grouped = {};
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const timerName = data.summary.timers?.current?.name;
+      const startTime = data.summary.timers?.current?.start_time;
+      const timestamp = data.timestamp;
+      const pressureIn = parseFloat(data.summary.live_data?.pressure_in) || 0;
+      const pressureOut = parseFloat(data.summary.live_data?.pressure_out) || 0;
+
+      if (timerName && startTime) {
+        const key = `${timerName} – ${startTime}`;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push({ timestamp, pressureIn, pressureOut });
+      }
+    });
+
+    const container = document.getElementById('pressure-by-timer');
+    container.innerHTML = '';
+
+    Object.entries(grouped).forEach(([timerKey, entries], index) => {
+      const chartId = `pressure-timer-chart-${index}`;
+      const col = document.createElement('div');
+      col.className = 'col-12';
+      col.innerHTML = `
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Pressure for Timer: ${timerKey}</h5>
+            <div class="chart-container">
+              <canvas id="${chartId}"></canvas>
+            </div>
+          </div>
+        </div>
+      `;
+      container.appendChild(col);
+
+      const ctx = document.getElementById(chartId).getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: entries.map(e => new Date(e.timestamp).toLocaleTimeString()),
+          datasets: [
+            {
+              label: 'Input Pressure',
+              data: entries.map(e => e.pressureIn),
+              borderColor: 'navy',
+              fill: false
+            },
+            {
+              label: 'Output Pressure',
+              data: entries.map(e => e.pressureOut),
+              borderColor: 'darkred',
+              fill: false
+            }
+          ]
+        }
+      });
+    });
+  }
+
+</script>
+
+<script>
+  // Refresh data every minute
+  setInterval(() => {
+    fetchLiveData();
+    fetchHistory();
+    populateDashboardOverview();
+    fetchPressureHistory();
+    fetchTimerHistory();
+    fetchPressureByTimer();
+  }, 60000); // Refresh every 1 minute
+  fetchPressureByTimer();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
