@@ -13,6 +13,7 @@
     }
   ],
   "hosting": {
+    "site": "sibhiorchards-dcon",
     "public": "public",
     "ignore": [
       "firebase.json",

@@ -11,44 +11,151 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   <style>
-  body {
-    background-color: #f4f6f9;
-    font-family: 'Inter', sans-serif;
-  }
-  h2 {
-    font-weight: 600;
-  }
-  .card {
-    border: none;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    transition: transform 0.2s ease-in-out;
-  }
-  .card:hover {
-    transform: translateY(-5px);
-  }
-  .card-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #333;
-  }
-  .card-text {
-    font-size: 0.95rem;
-    color: #555;
-  }
-  .chart-container {
-    position: relative;
-    height: 300px;
-    width: 100%;
-  }
-  .nav-tabs .nav-link {
-    font-weight: 600;
-  }
+    body {
+      background-color: #f4f6f9;
+      font-family: 'Inter', sans-serif;
+    }
+    h2 {
+      font-weight: 700;
+      font-size: 2.5rem;
+    }
+    .card {
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      transition: transform 0.2s ease-in-out;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+    }
+    .card-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #333;
+    }
+    .card-text, .card-body p {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #555;
+    }
+    .chart-container {
+      position: relative;
+      height: 400px;
+      width: 100%;
+    }
+    .nav-tabs .nav-link {
+      font-weight: 700;
+      font-size: 1.2rem;
+    }
+    @keyframes flow {
+      0% { background-position: 0 0; }
+      100% { background-position: 20px 0; }
+    }
+    #electricity-status, #pressure-status, #dashboard-current-timer {
+      text-align: center;
+    }
+    .card-body img {
+      display: block;
+      margin: 0 auto;
+    }
+    #motor-image, #timer-image {
+      width: 200px;
+      margin-bottom: 10px;
+    }
+    .progress-bar {
+      width: 0;
+    }
+    .text-center h6 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .text-center p {
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .d-flex {
+      display: flex;
+    }
+    .justify-content-around {
+      justify-content: space-around;
+    }
+    .align-items-center {
+      align-items: center;
+    }
+    @media (max-width: 991.98px) {
+      .col-lg-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+      }
+    }
+    @media (max-width: 767px) {
+      h2 {
+        font-size: 2rem;
+      }
+      .card-title {
+        font-size: 1.2rem;
+      }
+      .card-text, .card-body p {
+        font-size: 1rem;
+      }
+      #motor-image {
+        width: 80px !important;
+      }
+      #timer-image {
+        width: 60px !important;
+      }
+      .col-md-6, .col-lg-4, .col-md-4, .col-xl-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+      }
+      .card-body img {
+        margin-bottom: 10px !important;
+      }
+    }
+    .timeline {
+      position: relative;
+      margin: 0;
+      padding: 0 0 0 30px;
+      list-style: none;
+      border-left: 3px solid #007bff;
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 30px;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -9px;
+      top: 5px;
+      width: 16px;
+      height: 16px;
+      background-color: #007bff;
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 0 0 3px #cce5ff;
+    }
+    .timeline-item .card {
+      margin-left: 20px;
+      background: #f8f9fa;
+    }
+    .timeline-item .card-title {
+      color: #007bff;
+    }
+    .pressure-flow {
+      width: 100px;
+      height: 20px;
+      border-radius: 10px;
+      background: linear-gradient(to right, #0af, #0cf);
+      transition: all 0.3s ease;
+    }
   </style>
 </head>
 <body>
 <div class="container py-4">
   <h2 class="mb-4 text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
+  <!-- Add a new section for last updated time -->
+  <p id="last-updated-time" class="text-center text-muted">Last updated: Loading...</p>
 
   <!-- Tabs -->
   <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
@@ -76,8 +183,73 @@
   <div class="tab-content pt-3" id="dashboardTabsContent">
     <div class="tab-pane fade show active animate__animated animate__fadeInUp" id="dashboard" role="tabpanel">
       <!-- General Dashboard: display summary visuals, integrate electricity, pressure, and timer overview neatly here -->
-      <div id="dashboard-overview" class="row gy-3 mt-3"></div>
-      <div id="live-data" class="row gy-3 mt-3"></div>
+      <div id="dashboard-overview" class="row gy-3 mt-3">
+        <div class="col-md-6 col-lg-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title text-muted">Sump Status</h5>
+              <div id="electricity-status" class="mb-0">
+                <img id="motor-image" src="images/motor-off.png" alt="Motor">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title text-muted">Pressure (In/Out)</h5>
+              <div class="d-flex justify-content-around align-items-center">
+                <!-- Input Pressure Gauge -->
+                <div class="text-center">
+                  <canvas id="input-pressure-gauge" width="120" height="120"></canvas>
+                  <p class="mt-2 fw-bold">Input</p>
+                </div>
+                <!-- Output Pressure Gauge -->
+                <div class="text-center">
+                  <canvas id="output-pressure-gauge" width="120" height="120"></canvas>
+                  <p class="mt-2 fw-bold">Output</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-lg-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title text-muted">Current Timer</h5>
+              <div class="d-flex flex-column align-items-center">
+                <img id="timer-image" src="images/coconut.png" alt="Coconut Timer">
+                <p id="dashboard-current-timer" class="text-primary mt-2">Loading...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Voltage & Current Chart Card -->
+        <div class="col-md-6 col-lg-6 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title text-muted text-center">Voltage & Current (3 Phase)</h5>
+              <div class="d-flex justify-content-around align-items-center">
+                <div class="text-center" style="background-color: #ff4d4f; color: white; padding: 20px; border-radius: 10px; width: 100px;">
+                  <h6>R</h6>
+                  <p id="voltage-phase-1-box" class="mb-0">0 V</p>
+                  <p id="current-phase-1-box" class="mb-0">0 A</p>
+                </div>
+                <div class="text-center" style="background-color: #f7c600; color: white; padding: 20px; border-radius: 10px; width: 100px;">
+                  <h6>Y</h6>
+                  <p id="voltage-phase-2-box" class="mb-0">0 V</p>
+                  <p id="current-phase-2-box" class="mb-0">0 A</p>
+                </div>
+                <div class="text-center" style="background-color: #007bff; color: white; padding: 20px; border-radius: 10px; width: 100px;">
+                  <h6>B</h6>
+                  <p id="voltage-phase-3-box" class="mb-0">0 V</p>
+                  <p id="current-phase-3-box" class="mb-0">0 A</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="tab-pane fade animate__animated animate__fadeInUp" id="electricity" role="tabpanel">
@@ -134,7 +306,7 @@
     </div>
 
     <div class="tab-pane fade animate__animated animate__fadeInUp" id="timer-history" role="tabpanel">
-      <div id="timer-history-data" class="row gy-3 mt-3"></div>
+      <div id="timer-history-data" class="mt-3"></div>
     </div>
     <div class="tab-pane fade animate__animated animate__fadeInUp" id="pressure-timer" role="tabpanel">
       <div id="pressure-by-timer" class="row gy-3 mt-3"></div>
@@ -245,47 +417,122 @@
     });
   }
 
-  fetchLiveData();
-  fetchHistory();
+  function drawGauge(canvasId, value, maxValue, color) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+      console.error(`Canvas with ID '${canvasId}' not found.`);
+      return;
+    }
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 10;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw background arc
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.25 * Math.PI, false);
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.stroke();
+
+    // Draw value arc
+    const endAngle = 0.75 * Math.PI + (value / maxValue) * (1.5 * Math.PI);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, endAngle, false);
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    // Draw text
+    ctx.font = '16px Arial';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${value} bar`, centerX, centerY); // Display value in bar
+  }
 
   // Dashboard Overview
   async function populateDashboardOverview() {
     const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
     if (!snapshot.empty) {
       const data = snapshot.docs[0].data();
-      const live = data.summary.live_data;
+      const live = data.summary.live_data || {};
+
+      // Update last updated time
+      const serverTime = data.summary.device_info.server_time || 'N/A';
+      document.getElementById('last-updated-time').textContent = `Last updated: ${serverTime}`;
+
+      // Update voltage and current boxes
+      document.getElementById('voltage-phase-1-box').textContent = `${live.voltage_phase_1 ?? 'N/A'} V`;
+      document.getElementById('current-phase-1-box').textContent = `${live.current_phase_1 ?? 'N/A'} A`;
+
+      document.getElementById('voltage-phase-2-box').textContent = `${live.voltage_phase_2 ?? 'N/A'} V`;
+      document.getElementById('current-phase-2-box').textContent = `${live.current_phase_2 ?? 'N/A'} A`;
+
+      document.getElementById('voltage-phase-3-box').textContent = `${live.voltage_phase_3 ?? 'N/A'} V`;
+      document.getElementById('current-phase-3-box').textContent = `${live.current_phase_3 ?? 'N/A'} A`;
+
+      // Update pressure gauges
+      const inputPressure = parseFloat(live.pressure_in) || 0;
+      const outputPressure = parseFloat(live.pressure_out) || 0;
+      drawGauge('input-pressure-gauge', inputPressure, 6, '#007bff'); // Max value set to 6 bar
+      drawGauge('output-pressure-gauge', outputPressure, 6, '#28a745'); // Max value set to 6 bar
+
+      // Update pressure flow bar visuals
+      const inputFlow = document.getElementById('input-flow');
+      const outputFlow = document.getElementById('output-flow');
+      if (inputFlow && outputFlow) {
+        inputFlow.style.width = `${Math.min((inputPressure / 100) * 100, 100)}%`;
+        outputFlow.style.width = `${Math.min((outputPressure / 100) * 100, 100)}%`;
+      }
+
       const timers = data.summary.timers;
 
-      const dashboard = document.getElementById('dashboard-overview');
-      dashboard.innerHTML = '';
+      // Update timer text
+      document.getElementById('dashboard-current-timer').textContent = `${timers.current.name} (${timers.current.remaining_time} min)`;
 
-      const items = [
-        { title: 'Voltage (V)', value: `${live.voltage_phase_1} / ${live.voltage_phase_2} / ${live.voltage_phase_3}` },
-        { title: 'Current (A)', value: `${live.current_phase_1} / ${live.current_phase_2} / ${live.current_phase_3}` },
-        { title: 'Pressure (In/Out)', value: `${live.pressure_in} / ${live.pressure_out}` },
-        { title: 'Electricity Status', value: live.electricity_status || 'Unknown' },
-        { title: 'Current Timer', value: `${timers.current.name} (${timers.current.remaining_time})` },
-        { title: 'Next Timer', value: `${timers.next.name} (${timers.next.on_time})` }
-      ];
+      // Enhanced visuals for Sump Status
+      const motorImage = document.getElementById('motor-image');
+      if (live.sump_status === 'On') {
+        motorImage.src = 'images/motor-on.png';
+      } else {
+        motorImage.src = 'images/motor-off.png';
+      }
 
-      items.forEach(item => {
-        const col = document.createElement('div');
-        col.className = 'col-md-4';
-        col.innerHTML = `
-          <div class="card h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title text-muted">${item.title}</h5>
-              <p class="display-6 fw-semibold text-primary mb-0">${item.value}</p>
-            </div>
-          </div>`;
-        dashboard.appendChild(col);
-      });
-
-      dashboard.classList.add('animate__animated', 'animate__fadeIn');
+      // Enhanced visuals for Current Timer
+      const timerImage = document.getElementById('timer-image');
+      let timerName = timers.current.name?.toLowerCase() || '';
+      if (timerName.includes('coco')) {
+        timerImage.src = 'images/coconut.png';
+      } else if (timerName.includes('mango')) {
+        timerImage.src = 'images/mango.png';
+      } else if (timerName.includes('house')) {
+        timerImage.src = 'images/house.png';
+      } else if (timerName.includes('jamun')) {
+        timerImage.src = 'images/jamun.png';
+      } else if (timerName.includes('amla')) {
+        timerImage.src = 'images/amla.png';
+      } else if (timerName.includes('backwash')) {
+        timerImage.src = 'images/backwash.png';
+      } else if (timerName.includes('grass')) {
+        timerImage.src = 'images/grass.png';
+      } else if (timerName.includes('guava')) {
+        timerImage.src = 'images/guava.png';
+      } else if (timerName.includes('onion')) {
+        timerImage.src = 'images/onion.png';
+      } else if (timerName.includes('pome')) {
+        timerImage.src = 'images/pomen.png';
+      } else {
+        timerImage.src = 'images/timer-default.png';
+      }
+    } else {
+      console.error("No data found for today's date.");
     }
   }
 
-  // Pressure History Chart
   async function fetchPressureHistory() {
     const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
     const labels = [], inputPressures = [], outputPressures = [];
@@ -323,7 +570,7 @@
     });
   }
 
-  // Timer History
+  // Timer History (Timeline)
   async function fetchTimerHistory() {
     const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0])
       .orderBy('timestamp', 'desc')
@@ -332,6 +579,9 @@
 
     const container = document.getElementById('timer-history-data');
     container.innerHTML = ''; // Clear any previous content
+    const timeline = document.createElement('div');
+    timeline.className = 'timeline';
+    container.appendChild(timeline);
 
     const seenTimers = new Set();
 
@@ -344,13 +594,12 @@
         if (!seenTimers.has(key)) {
           seenTimers.add(key);
 
-          const col = document.createElement('div');
-          col.className = 'col-md-6';
-          col.innerHTML = `
-            <div class="card h-100">
+          const item = document.createElement('div');
+          item.className = 'timeline-item';
+          item.innerHTML = `
+            <div class="card">
               <div class="card-body">
-                <h5 class="card-title">Timer History</h5>
-                <p><strong>Timer Name:</strong> ${timers.current.name}</p>
+                <h5 class="card-title">${timers.current.name}</h5>
                 <p><strong>Run Time:</strong> ${timers.current.run_time} minutes</p>
                 <p><strong>Remaining Time:</strong> ${timers.current.remaining_time} minutes</p>
                 <p><strong>Completed:</strong> ${timers.current.completed ? 'Yes' : 'No'}</p>
@@ -358,7 +607,7 @@
               </div>
             </div>
           `;
-          container.appendChild(col);
+          timeline.appendChild(item);
         }
       }
     });

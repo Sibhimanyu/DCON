@@ -106,7 +106,11 @@ exports.fetchAndStoreIrrigationData = onSchedule("every 1 minutes", async (event
           live_data: {
             pressure_in: pressureIn,
             pressure_out: pressureOut,
-            sump_status: livePacket.includes("Sump5HP") ? "On" : "Off",
+            sump_status: (() => {
+              const fields = livePacket.split(',');
+              const status = fields[7];
+              return status === "1" ? "On" : "Off";
+            })(),
             irrigation_status: livePacket.includes("TM") ? "Active" : "Inactive",
             voltage_phase_1: voltage1,
             voltage_phase_2: voltage2,
