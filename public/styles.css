@@ -1,95 +1,163 @@
 body {
-  font-family: Arial, sans-serif;
-  background-color: #f4f4f9;
-  margin: 0;
-  padding: 0;
+  background-color: #f4f6f9;
+  font-family: 'Inter', sans-serif;
 }
 
-h1 {
-  text-align: center;
+h2 {
+  font-weight: 700;
+  font-size: 2.5rem;
+}
+
+.card {
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+}
+
+.card-title {
+  font-size: 1.5rem;
+  font-weight: 700;
   color: #333;
-  margin-top: 20px;
 }
 
-#data-container {
-  max-width: 800px;
-  margin: 20px auto;
-  padding: 10px;
-}
-
-#data-container div {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  margin-bottom: 15px;
-  padding: 15px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-#data-container div p {
-  margin: 5px 0;
+.card-text, .card-body p {
+  font-size: 1.2rem;
+  font-weight: 600;
   color: #555;
 }
 
-#data-container div p strong {
-  color: #000;
+.chart-container {
+  position: relative;
+  height: 400px;
+  width: 100%;
 }
 
-p {
+.nav-tabs .nav-link {
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+@keyframes flow {
+  0% { background-position: 0 0; }
+  100% { background-position: 20px 0; }
+}
+
+#electricity-status, #pressure-status, #dashboard-current-timer {
   text-align: center;
-  color: #666;
 }
 
-#live-data-container, #history-container {
-  max-width: 800px;
-  margin: 20px auto;
-  padding: 10px;
-}
-
-.live-data-item, .history-item {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  margin-bottom: 10px;
-  padding: 10px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.live-data-item:hover, .history-item:hover {
-  background-color: #f0f0f0;
-}
-
-#back-button {
+.card-body img {
   display: block;
-  margin: 10px 0;
-  padding: 10px 20px;
+  margin: 0 auto;
+}
+
+#motor-image, #timer-image {
+  width: 200px;
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  width: 0;
+}
+
+.text-center h6 {
+  font-size: 0.5rem;
+  font-weight: 700;
+}
+
+.text-center p {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.d-flex {
+  display: flex;
+}
+
+.justify-content-around {
+  justify-content: space-around;
+}
+
+.align-items-center {
+  align-items: center;
+}
+
+@media (max-width: 991.98px) {
+  .col-lg-4 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  h2 {
+    font-size: 2rem;
+  }
+  .card-title {
+    font-size: 1.2rem;
+  }
+  .card-text, .card-body p {
+    font-size: 1rem;
+  }
+  #motor-image {
+    width: 80px !important;
+  }
+  #timer-image {
+    width: 60px !important;
+  }
+  .col-md-6, .col-lg-4, .col-md-4, .col-xl-4 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+  .card-body img {
+    margin-bottom: 10px !important;
+  }
+}
+
+.timeline {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 30px;
+  list-style: none;
+  border-left: 3px solid #007bff;
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 30px;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -9px;
+  top: 5px;
+  width: 16px;
+  height: 16px;
   background-color: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 0 0 3px #cce5ff;
 }
 
-#back-button:hover {
-  background-color: #0056b3;
+.timeline-item .card {
+  margin-left: 20px;
+  background: #f8f9fa;
 }
 
-#timers {
-  margin-top: 20px;
+.timeline-item .card-title {
+  color: #007bff;
 }
 
-#timers h3 {
-  margin-bottom: 10px;
-}
-
-#voltage-graph-container, #current-graph-container {
-  margin-top: 20px;
-  text-align: center;
-}
-
-canvas {
-  margin: 20px auto;
-  display: block;
+.pressure-flow {
+  width: 100px;
+  height: 20px;
+  border-radius: 10px;
+  background: linear-gradient(to right, #0af, #0cf);
+  transition: all 0.3s ease;
 }

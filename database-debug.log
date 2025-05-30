@@ -1,4 +1,4 @@
-22:35:04.325 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
-22:35:04.446 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
-22:35:42.292 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO com.firebase.core.namespace.NamespaceActor - mobitech-c93c0-default-rtdb successfully activated FBKV (SurveyIdle(0)) wait: 188ms, init: 0ms
-22:35:42.428 [NamespaceSystem-blocking-namespace-operation-dispatcher-6] INFO com.firebase.core.namespace.StateManager - Namespace mobitech-c93c0-default-rtdb status Active to Active
+07:06:03.016 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+07:06:03.178 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
+07:06:17.444 [NamespaceSystem-akka.actor.default-dispatcher-4] INFO com.firebase.core.namespace.NamespaceActor - mobitech-c93c0-default-rtdb successfully activated FBKV (SurveyIdle(0)) wait: 307ms, init: 0ms
+07:06:17.571 [NamespaceSystem-blocking-namespace-operation-dispatcher-6] INFO com.firebase.core.namespace.StateManager - Namespace mobitech-c93c0-default-rtdb status Active to Active

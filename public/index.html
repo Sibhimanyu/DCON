@@ -7,151 +7,20 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-  <style>
-    body {
-      background-color: #f4f6f9;
-      font-family: 'Inter', sans-serif;
-    }
-    h2 {
-      font-weight: 700;
-      font-size: 2.5rem;
-    }
-    .card {
-      border: none;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-      transition: transform 0.2s ease-in-out;
-    }
-    .card:hover {
-      transform: translateY(-5px);
-    }
-    .card-title {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: #333;
-    }
-    .card-text, .card-body p {
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: #555;
-    }
-    .chart-container {
-      position: relative;
-      height: 400px;
-      width: 100%;
-    }
-    .nav-tabs .nav-link {
-      font-weight: 700;
-      font-size: 1.2rem;
-    }
-    @keyframes flow {
-      0% { background-position: 0 0; }
-      100% { background-position: 20px 0; }
-    }
-    #electricity-status, #pressure-status, #dashboard-current-timer {
-      text-align: center;
-    }
-    .card-body img {
-      display: block;
-      margin: 0 auto;
-    }
-    #motor-image, #timer-image {
-      width: 200px;
-      margin-bottom: 10px;
-    }
-    .progress-bar {
-      width: 0;
-    }
-    .text-center h6 {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-    .text-center p {
-      font-size: 1.2rem;
-      font-weight: 600;
-    }
-    .d-flex {
-      display: flex;
-    }
-    .justify-content-around {
-      justify-content: space-around;
-    }
-    .align-items-center {
-      align-items: center;
-    }
-    @media (max-width: 991.98px) {
-      .col-lg-4 {
-        flex: 0 0 100%;
-        max-width: 100%;
-      }
-    }
-    @media (max-width: 767px) {
-      h2 {
-        font-size: 2rem;
-      }
-      .card-title {
-        font-size: 1.2rem;
-      }
-      .card-text, .card-body p {
-        font-size: 1rem;
-      }
-      #motor-image {
-        width: 80px !important;
-      }
-      #timer-image {
-        width: 60px !important;
-      }
-      .col-md-6, .col-lg-4, .col-md-4, .col-xl-4 {
-        flex: 0 0 100% !important;
-        max-width: 100% !important;
-      }
-      .card-body img {
-        margin-bottom: 10px !important;
-      }
-    }
-    .timeline {
-      position: relative;
-      margin: 0;
-      padding: 0 0 0 30px;
-      list-style: none;
-      border-left: 3px solid #007bff;
-    }
-    .timeline-item {
-      position: relative;
-      margin-bottom: 30px;
-    }
-    .timeline-item::before {
-      content: '';
-      position: absolute;
-      left: -9px;
-      top: 5px;
-      width: 16px;
-      height: 16px;
-      background-color: #007bff;
-      border-radius: 50%;
-      border: 3px solid white;
-      box-shadow: 0 0 0 3px #cce5ff;
-    }
-    .timeline-item .card {
-      margin-left: 20px;
-      background: #f8f9fa;
-    }
-    .timeline-item .card-title {
-      color: #007bff;
-    }
-    .pressure-flow {
-      width: 100px;
-      height: 20px;
-      border-radius: 10px;
-      background: linear-gradient(to right, #0af, #0cf);
-      transition: all 0.3s ease;
-    }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
 </head>
 <body>
+  <!-- Add loading screen -->
+  <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.9); display: flex; justify-content: center; align-items: center; z-index: 9999;">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
 <div class="container py-4">
   <h2 class="mb-4 text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
   <!-- Add a new section for last updated time -->
@@ -169,13 +38,10 @@
       <button class="nav-link" id="pressure-tab" data-bs-toggle="tab" data-bs-target="#pressure" type="button" role="tab">Pressure</button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="timers-tab" data-bs-toggle="tab" data-bs-target="#timers" type="button" role="tab">Timers</button>
-    </li>
-    <li class="nav-item" role="presentation">
       <button class="nav-link" id="timer-history-tab" data-bs-toggle="tab" data-bs-target="#timer-history" type="button" role="tab">Timer History</button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="pressure-timer-tab" data-bs-toggle="tab" data-bs-target="#pressure-timer" type="button" role="tab">Pressure by Timer</button>
+      <button class="nav-link" id="timer-pressure-history-tab" data-bs-toggle="tab" data-bs-target="#timer-pressure-history" type="button" role="tab">Timer Pressure History</button>
     </li>
   </ul>
 
@@ -208,6 +74,16 @@
                 <div class="text-center">
                   <canvas id="output-pressure-gauge" width="120" height="120"></canvas>
                   <p class="mt-2 fw-bold">Output</p>
+                </div>
+              </div>
+              <!-- Add linear gauge for pressure difference -->
+              <div class="mt-3">
+                <p class="text-center fw-bold">Pressure Difference</p>
+                <div class="text-center mb-2">
+                  <span id="pressure-difference-value" style="font-size: 1.5rem; font-weight: bold;">0.00 bar</span>
+                </div>
+                <div class="progress" style="height: 20px;">
+                  <div id="pressure-difference-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
               </div>
             </div>
@@ -280,25 +156,14 @@
 
     <div class="tab-pane fade animate__animated animate__fadeInUp" id="pressure" role="tabpanel">
       <!-- Pressure input/output history charts and details -->
-      <div id="pressure-data" class="row gy-3 mt-3"></div>
-    </div>
-
-    <div class="tab-pane fade animate__animated animate__fadeInUp" id="timers" role="tabpanel">
-      <!-- Timer current and next schedule -->
-      <div class="row gy-3">
-        <div class="col-md-6">
+      <div id="pressure-data" class="row gy-3 mt-3">
+        <div class="col-12">
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Current Timer</h5>
-              <p id="current-timer">Loading...</p>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">Next Timer</h5>
-              <p id="next-timer">Loading...</p>
+              <h5 class="card-title text-center">Pressure History (Input, Output, and Difference)</h5>
+              <div class="chart-container" style="height: 500px; width: 100%; overflow-x: auto;">
+                <canvas id="pressure-chart"></canvas>
+              </div>
             </div>
           </div>
         </div>
@@ -306,10 +171,40 @@
     </div>
 
     <div class="tab-pane fade animate__animated animate__fadeInUp" id="timer-history" role="tabpanel">
-      <div id="timer-history-data" class="mt-3"></div>
+      <div class="mt-3">
+        <label for="start-date" class="form-label">Start Date:</label>
+        <input type="date" id="start-date" class="form-control mb-3">
+        <label for="end-date" class="form-label">End Date:</label>
+        <input type="date" id="end-date" class="form-control mb-3">
+        <button id="fetch-timer-history" class="btn btn-primary">Fetch History</button>
+      </div>
+      <div id="timer-history-data" class="mt-4"></div>
     </div>
-    <div class="tab-pane fade animate__animated animate__fadeInUp" id="pressure-timer" role="tabpanel">
-      <div id="pressure-by-timer" class="row gy-3 mt-3"></div>
+
+    <div class="tab-pane fade animate__animated animate__fadeInUp" id="timer-pressure-history" role="tabpanel">
+      <div class="mt-3">
+        <!-- Add date range inputs -->
+        <label for="start-date-pressure" class="form-label">Start Date:</label>
+        <input type="date" id="start-date-pressure" class="form-control mb-3">
+        <label for="end-date-pressure" class="form-label">End Date:</label>
+        <input type="date" id="end-date-pressure" class="form-control mb-3">
+        <button id="fetch-timer-pressure-history" class="btn btn-primary">Fetch History</button>
+        <table class="table table-striped mt-3">
+          <thead>
+            <tr>
+              <th>Timer Name</th>
+              <th>Average Input Pressure (bar)</th>
+              <th>Average Output Pressure (bar)</th>
+              <th>Average Pressure Difference (bar)</th>
+              <th>Start Time</th>
+              <th>End Time</th>
+            </tr>
+          </thead>
+          <tbody id="timer-pressure-history-table-body">
+            <!-- Table rows will be dynamically populated -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -328,7 +223,19 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
 
+  // Show loading screen
+  function showLoadingScreen() {
+    document.getElementById('loading-screen').style.display = 'flex';
+  }
+
+  // Hide loading screen
+  function hideLoadingScreen() {
+    document.getElementById('loading-screen').style.display = 'none';
+  }
+
+  // Fetch live data
   async function fetchLiveData() {
+    showLoadingScreen();
     const liveContainer = document.getElementById('live-data');
     const currentTimer = document.getElementById('current-timer');
     const nextTimer = document.getElementById('next-timer');
@@ -372,9 +279,12 @@
       // Add entrance animation
       liveContainer.classList.add('animate__animated', 'animate__fadeIn');
     }
+    hideLoadingScreen();
   }
 
+  // Fetch history data
   async function fetchHistory() {
+    showLoadingScreen();
     const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
     const labels = [];
     const volt1 = [], volt2 = [], volt3 = [], curr1 = [], curr2 = [], curr3 = [];
@@ -415,6 +325,7 @@
         ]
       }
     });
+    hideLoadingScreen();
   }
 
   function drawGauge(canvasId, value, maxValue, color) {
@@ -454,8 +365,33 @@
     ctx.fillText(`${value} bar`, centerX, centerY); // Display value in bar
   }
 
+  // Update pressure difference bar and value
+  function updatePressureDifference(inputPressure, outputPressure) {
+    const difference = Math.abs(inputPressure - outputPressure);
+    const maxDifference = 3; // Assuming max difference is 6 bar
+    const percentage = Math.min((difference / maxDifference) * 100, 100);
+    const bar = document.getElementById('pressure-difference-bar');
+    const valueDisplay = document.getElementById('pressure-difference-value');
+
+    bar.style.width = `${percentage}%`;
+    bar.ariaValueNow = percentage;
+    valueDisplay.textContent = `${difference.toFixed(2)} bar`;
+
+    // Set color based on intensity
+    if (difference <= 0.2) {
+      bar.className = 'progress-bar bg-success'; // Low intensity
+    } else if (difference > 0.2 && difference <= 0.9) {
+      bar.className = 'progress-bar bg-warning'; // Good intensity
+    } else if (difference > 0.9 && difference <= 2) {
+      bar.className = 'progress-bar bg-danger'; // Bad intensity
+    } else {
+      bar.className = 'progress-bar bg-dark'; // Extreme cases
+    }
+  }
+
   // Dashboard Overview
   async function populateDashboardOverview() {
+    showLoadingScreen();
     const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
     if (!snapshot.empty) {
       const data = snapshot.docs[0].data();
@@ -480,6 +416,9 @@
       const outputPressure = parseFloat(live.pressure_out) || 0;
       drawGauge('input-pressure-gauge', inputPressure, 6, '#007bff'); // Max value set to 6 bar
       drawGauge('output-pressure-gauge', outputPressure, 6, '#28a745'); // Max value set to 6 bar
+
+      // Update pressure difference
+      updatePressureDifference(inputPressure, outputPressure);
 
       // Update pressure flow bar visuals
       const inputFlow = document.getElementById('input-flow');
@@ -531,31 +470,29 @@
     } else {
       console.error("No data found for today's date.");
     }
+    hideLoadingScreen();
   }
 
   async function fetchPressureHistory() {
-    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
-    const labels = [], inputPressures = [], outputPressures = [];
+    showLoadingScreen();
+    const snapshot = await db.collection('irrigation_devices')
+      .doc('MCON874Q000568')
+      .collection(new Date().toISOString().split('T')[0])
+      .orderBy('timestamp', 'desc')
+      .limit(100) // Fetch more data points
+      .get();
+
+    const labels = [], inputPressures = [], outputPressures = [], pressureDifferences = [];
 
     snapshot.forEach(doc => {
       const data = doc.data().summary.live_data;
-      labels.push(doc.data().timestamp);
-      inputPressures.push(data.pressure_in || 0);
-      outputPressures.push(data.pressure_out || 0);
+      const inputPressure = parseFloat(data.pressure_in) || 0;
+      const outputPressure = parseFloat(data.pressure_out) || 0;
+      labels.push(new Date(doc.data().timestamp).toLocaleTimeString());
+      inputPressures.push(inputPressure);
+      outputPressures.push(outputPressure);
+      pressureDifferences.push(Math.abs(inputPressure - outputPressure)); // Calculate difference
     });
-
-    const container = document.getElementById('pressure-data');
-    container.innerHTML = `
-      <div class="col-12">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Pressure History</h5>
-            <div class="chart-container">
-              <canvas id="pressure-chart"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>`;
 
     const pressureCtx = document.getElementById('pressure-chart').getContext('2d');
     new Chart(pressureCtx, {
@@ -563,139 +500,228 @@
       data: {
         labels: labels.reverse(),
         datasets: [
-          { label: 'Input Pressure', data: inputPressures.reverse(), borderColor: 'navy' },
-          { label: 'Output Pressure', data: outputPressures.reverse(), borderColor: 'darkred' }
+          {
+            label: 'Input Pressure',
+            data: inputPressures.reverse(),
+            borderColor: 'navy',
+            fill: false,
+            tension: 0.4
+          },
+          {
+            label: 'Output Pressure',
+            data: outputPressures.reverse(),
+            borderColor: 'darkred',
+            fill: false,
+            tension: 0.4
+          },
+          {
+            label: 'Pressure Difference',
+            data: pressureDifferences.reverse(),
+            borderColor: 'green',
+            fill: false,
+            tension: 0.4
+          }
         ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top'
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Time'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Pressure (bar)'
+            },
+            beginAtZero: true
+          }
+        }
       }
     });
+    hideLoadingScreen();
   }
 
   // Timer History (Timeline)
-  async function fetchTimerHistory() {
-    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0])
-      .orderBy('timestamp', 'desc')
-      .limit(10000)
-      .get();
-
+  async function fetchTimerHistory(startDate, endDate) {
+    showLoadingScreen();
     const container = document.getElementById('timer-history-data');
-    container.innerHTML = ''; // Clear any previous content
+    container.innerHTML = ''; // Clear previous content
     const timeline = document.createElement('div');
     timeline.className = 'timeline';
     container.appendChild(timeline);
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999); // Include the entire end date
+
     const seenTimers = new Set();
 
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const timers = data.summary.timers;
+    while (start <= end) {
+      const dateString = start.toISOString().split('T')[0];
+      const snapshot = await db.collection('irrigation_devices')
+        .doc('MCON874Q000568')
+        .collection(dateString)
+        .orderBy('timestamp', 'desc')
+        .get();
 
-      if (timers && timers.current && timers.current.name) {
-        const key = `${timers.current.name}-${timers.current.number}`;
-        if (!seenTimers.has(key)) {
-          seenTimers.add(key);
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const timers = data.summary.timers;
 
-          const item = document.createElement('div');
-          item.className = 'timeline-item';
-          item.innerHTML = `
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">${timers.current.name}</h5>
-                <p><strong>Run Time:</strong> ${timers.current.run_time} minutes</p>
-                <p><strong>Remaining Time:</strong> ${timers.current.remaining_time} minutes</p>
-                <p><strong>Completed:</strong> ${timers.current.completed ? 'Yes' : 'No'}</p>
-                <p><strong>Start Time:</strong> ${timers.current.start_time}</p>
+        if (timers && timers.current && timers.current.name) {
+          const key = `${timers.current.name}-${timers.current.number}`;
+          if (!seenTimers.has(key)) {
+            seenTimers.add(key);
+
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            item.innerHTML = `
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title">${timers.current.name}</h5>
+                  <p><strong>Run Time:</strong> ${timers.current.run_time} minutes</p>
+                  <p><strong>Remaining Time:</strong> ${timers.current.remaining_time} minutes</p>
+                  <p><strong>Completed:</strong> ${timers.current.completed ? 'Yes' : 'No'}</p>
+                  <p><strong>Start Time:</strong> ${timers.current.start_time}</p>
+                  <p><strong>Timestamp:</strong> ${new Date(doc.data().timestamp).toLocaleString()}</p>
+                </div>
               </div>
-            </div>
-          `;
-          timeline.appendChild(item);
+            `;
+            timeline.appendChild(item);
+          }
         }
-      }
-    });
+      });
+
+      start.setDate(start.getDate() + 1); // Move to the next day
+    }
+    hideLoadingScreen();
   }
+
+  document.getElementById('fetch-timer-history').addEventListener('click', () => {
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+
+    if (startDate && endDate) {
+      fetchTimerHistory(startDate, endDate);
+    } else {
+      alert('Please select both start and end dates.');
+    }
+  });
+
+  async function fetchTimerPressureHistory(startDate, endDate) {
+    showLoadingScreen();
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999); // Include the entire end date
+
+    const timerData = {};
+
+    while (start <= end) {
+      const dateString = start.toISOString().split('T')[0];
+      const snapshot = await db.collection('irrigation_devices')
+        .doc('MCON874Q000568')
+        .collection(dateString)
+        .orderBy('timestamp', 'asc')
+        .get();
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const timers = data.summary.timers;
+        const live = data.summary.live_data;
+
+        if (timers && timers.current && live) {
+          const timerName = timers.current.name;
+          if (!timerData[timerName]) {
+            timerData[timerName] = {
+              totalRunTime: 0,
+              totalInputPressure: 0,
+              totalOutputPressure: 0,
+              totalPressureDifference: 0,
+              count: 0,
+              startTime: null,
+              endTime: null
+            };
+          }
+
+          const inputPressure = parseFloat(live.pressure_in) || 0;
+          const outputPressure = parseFloat(live.pressure_out) || 0;
+          const pressureDifference = Math.abs(inputPressure - outputPressure);
+
+          timerData[timerName].totalRunTime += parseInt(timers.current.run_time) || 0;
+          timerData[timerName].totalInputPressure += inputPressure;
+          timerData[timerName].totalOutputPressure += outputPressure;
+          timerData[timerName].totalPressureDifference += pressureDifference;
+          timerData[timerName].count += 1;
+
+          const timestamp = new Date(doc.data().timestamp);
+          if (!timerData[timerName].startTime || timestamp < timerData[timerName].startTime) {
+            timerData[timerName].startTime = timestamp;
+          }
+          if (!timerData[timerName].endTime || timestamp > timerData[timerName].endTime) {
+            timerData[timerName].endTime = timestamp;
+          }
+        }
+      });
+
+      start.setDate(start.getDate() + 1); // Move to the next day
+    }
+
+    const tableBody = document.getElementById('timer-pressure-history-table-body');
+    tableBody.innerHTML = ''; // Clear previous content
+
+    Object.entries(timerData).forEach(([timerName, data]) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${timerName}</td>
+        <td>${(data.totalInputPressure / data.count).toFixed(2)}</td>
+        <td>${(data.totalOutputPressure / data.count).toFixed(2)}</td>
+        <td>${(data.totalPressureDifference / data.count).toFixed(2)}</td>
+        <td>${data.startTime.toLocaleString()}</td>
+        <td>${data.endTime.toLocaleString()}</td>
+      `;
+      tableBody.appendChild(row);
+    });
+    hideLoadingScreen();
+  }
+
+  document.getElementById('fetch-timer-pressure-history').addEventListener('click', () => {
+    const startDate = document.getElementById('start-date-pressure').value;
+    const endDate = document.getElementById('end-date-pressure').value;
+
+    if (startDate && endDate) {
+      fetchTimerPressureHistory(startDate, endDate);
+    } else {
+      alert('Please select both start and end dates.');
+    }
+  });
 
   // Run on load
   populateDashboardOverview();
   fetchPressureHistory();
-  fetchTimerHistory();
-  // Pressure by Timer
-  async function fetchPressureByTimer() {
-    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0])
-      .orderBy('timestamp', 'asc')
-      .limit(500)
-      .get();
+  fetchTimerHistory(); // Fetch once on load
+  fetchTimerPressureHistory(); // Fetch once on load
 
-    const grouped = {};
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const timerName = data.summary.timers?.current?.name;
-      const startTime = data.summary.timers?.current?.start_time;
-      const timestamp = data.timestamp;
-      const pressureIn = parseFloat(data.summary.live_data?.pressure_in) || 0;
-      const pressureOut = parseFloat(data.summary.live_data?.pressure_out) || 0;
-
-      if (timerName && startTime) {
-        const key = `${timerName} – ${startTime}`;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push({ timestamp, pressureIn, pressureOut });
-      }
-    });
-
-    const container = document.getElementById('pressure-by-timer');
-    container.innerHTML = '';
-
-    Object.entries(grouped).forEach(([timerKey, entries], index) => {
-      const chartId = `pressure-timer-chart-${index}`;
-      const col = document.createElement('div');
-      col.className = 'col-12';
-      col.innerHTML = `
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Pressure for Timer: ${timerKey}</h5>
-            <div class="chart-container">
-              <canvas id="${chartId}"></canvas>
-            </div>
-          </div>
-        </div>
-      `;
-      container.appendChild(col);
-
-      const ctx = document.getElementById(chartId).getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: entries.map(e => new Date(e.timestamp).toLocaleTimeString()),
-          datasets: [
-            {
-              label: 'Input Pressure',
-              data: entries.map(e => e.pressureIn),
-              borderColor: 'navy',
-              fill: false
-            },
-            {
-              label: 'Output Pressure',
-              data: entries.map(e => e.pressureOut),
-              borderColor: 'darkred',
-              fill: false
-            }
-          ]
-        }
-      });
-    });
-  }
-
-</script>
-
-<script>
-  // Refresh data every minute
+  // Refresh data every minute (excluding timer history and timer pressure history)
   setInterval(() => {
     fetchLiveData();
     fetchHistory();
     populateDashboardOverview();
     fetchPressureHistory();
-    fetchTimerHistory();
-    fetchPressureByTimer();
   }, 60000); // Refresh every 1 minute
-  fetchPressureByTimer();
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
