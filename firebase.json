@@ -1,4 +1,10 @@
 {
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
   "functions": [
     {
       "source": "functions",
@@ -25,28 +31,18 @@
     "functions": {
       "port": 5001
     },
+    "firestore": {
+      "port": 8080
+    },
     "hosting": {
-      "port": 5002
+      "port": 5000
+    },
+    "pubsub": {
+      "port": 8085
     },
     "ui": {
       "enabled": true
     },
-    "singleProjectMode": true,
-    "firestore": {
-      "port": 8081
-    },
-    "database": {
-      "port": 9000
-    },
-    "pubsub": {
-      "port": 8085
-    }
-  },
-  "database": {
-    "rules": "database.rules.json"
-  },
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "singleProjectMode": true
   }
 }

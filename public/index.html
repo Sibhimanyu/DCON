@@ -14,13 +14,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
 </head>
 <body>
-  <!-- Add loading screen -->
-  <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.9); display: flex; justify-content: center; align-items: center; z-index: 9999;">
-    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-  </div>
-
 <div class="container py-4">
   <h2 class="mb-4 text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
   <!-- Add a new section for last updated time -->
@@ -56,6 +49,7 @@
               <h5 class="card-title text-muted">Sump Status</h5>
               <div id="electricity-status" class="mb-0">
                 <img id="motor-image" src="images/motor-off.png" alt="Motor">
+                <div id="motor-status-text" class="mt-2 fw-bold text-secondary">Loading...</div>
               </div>
             </div>
           </div>
@@ -78,9 +72,8 @@
               </div>
               <!-- Add linear gauge for pressure difference -->
               <div class="mt-3">
-                <p class="text-center fw-bold">Pressure Difference</p>
                 <div class="text-center mb-2">
-                  <span id="pressure-difference-value" style="font-size: 1.5rem; font-weight: bold;">0.00 bar</span>
+                  <span id="pressure-difference-value" style="font-size: 1.5rem; font-weight: bold;">0.00 difference (bar)</span>
                 </div>
                 <div class="progress" style="height: 20px;">
                   <div id="pressure-difference-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
@@ -94,8 +87,10 @@
             <div class="card-body text-center">
               <h5 class="card-title text-muted">Current Timer</h5>
               <div class="d-flex flex-column align-items-center">
-                <img id="timer-image" src="images/coconut.png" alt="Coconut Timer">
+                <div id="timer-images"></div>
                 <p id="dashboard-current-timer" class="text-primary mt-2">Loading...</p>
+                <!-- Add: Valves list display -->
+                <div id="dashboard-current-valves" class="mt-2"></div>
               </div>
             </div>
           </div>
@@ -105,22 +100,34 @@
           <div class="card h-100">
             <div class="card-body">
               <h5 class="card-title text-muted text-center">Voltage & Current (3 Phase)</h5>
-              <div class="d-flex justify-content-around align-items-center">
-                <div class="text-center" style="background-color: #ff4d4f; color: white; padding: 20px; border-radius: 10px; width: 100px;">
+              <div class="d-flex justify-content-around align-items-center" style="padding-top: 40px !important;">
+                <div class="text-center" style="background-color: #ff4d4f; color: white; padding: 20px; border-radius: 10px; width: 150px;">
                   <h6>R</h6>
                   <p id="voltage-phase-1-box" class="mb-0">0 V</p>
                   <p id="current-phase-1-box" class="mb-0">0 A</p>
                 </div>
-                <div class="text-center" style="background-color: #f7c600; color: white; padding: 20px; border-radius: 10px; width: 100px;">
+                <div class="text-center" style="background-color: #f7c600; color: white; padding: 20px; border-radius: 10px; width: 150px;">
                   <h6>Y</h6>
                   <p id="voltage-phase-2-box" class="mb-0">0 V</p>
                   <p id="current-phase-2-box" class="mb-0">0 A</p>
                 </div>
-                <div class="text-center" style="background-color: #007bff; color: white; padding: 20px; border-radius: 10px; width: 100px;">
+                <div class="text-center" style="background-color: #007bff; color: white; padding: 20px; border-radius: 10px; width: 150px;">
                   <h6>B</h6>
                   <p id="voltage-phase-3-box" class="mb-0">0 V</p>
                   <p id="current-phase-3-box" class="mb-0">0 A</p>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Add Next Timer Card -->
+        <div class="col-md-6 col-lg-4 mb-4">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title text-muted">Next Timer</h5>
+              <div class="d-flex flex-column align-items-center">
+                <img id="next-timer-image" src="images/none.png" alt="Next Timer" style="width: 150px;" />
+                <p id="dashboard-next-timer" class="text-secondary mt-2">Loading...</p>
               </div>
             </div>
           </div>
@@ -209,521 +216,7 @@
   </div>
 </div>
 
-<script>
-  // Firebase Config
-  const firebaseConfig = {
-    apiKey: "AIzaSyCzS6245V48Mb-q91qpjqK2l8o87MJ9Hho",
-    authDomain: "mobitech-c93c0.firebaseapp.com",
-    projectId: "mobitech-c93c0",
-    storageBucket: "mobitech-c93c0.appspot.com",
-    messagingSenderId: "284819435696",
-    appId: "1:284819435696:web:933fae6a22a0b05ecdcb75",
-    measurementId: "G-M1KEW3J26N"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
-
-  // Show loading screen
-  function showLoadingScreen() {
-    document.getElementById('loading-screen').style.display = 'flex';
-  }
-
-  // Hide loading screen
-  function hideLoadingScreen() {
-    document.getElementById('loading-screen').style.display = 'none';
-  }
-
-  // Fetch live data
-  async function fetchLiveData() {
-    showLoadingScreen();
-    const liveContainer = document.getElementById('live-data');
-    const currentTimer = document.getElementById('current-timer');
-    const nextTimer = document.getElementById('next-timer');
-    liveContainer.innerHTML = '';
-    currentTimer.textContent = '';
-    nextTimer.textContent = '';
-
-    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      const live = data.summary.live_data;
-
-      Object.entries(live).forEach(([key, val]) => {
-        const col = document.createElement('div');
-        col.className = 'col-md-4';
-        col.innerHTML = `
-          <div class="card h-100">
-            <div class="card-body d-flex flex-column justify-content-center text-center">
-              <h5 class="card-title text-uppercase text-muted" style="font-size: 0.9rem;">${key.replace(/_/g, ' ')}</h5>
-              <p class="display-6 fw-semibold text-primary mb-0">${val}</p>
-            </div>
-          </div>`;
-        liveContainer.appendChild(col);
-      });
-
-      const timers = data.summary.timers;
-      // Progress bar for current timer
-      const currentTimerDuration = parseInt(timers.current.run_time) || 0;
-      const currentTimerRemaining = parseInt(timers.current.remaining_time) || 0;
-      const currentTimerProgress = currentTimerDuration > 0 ? Math.round(((currentTimerDuration - currentTimerRemaining) / currentTimerDuration) * 100) : 0;
-      currentTimer.innerHTML = `
-        <strong>${timers.current.name}</strong>
-        <div class="progress mt-2">
-          <div class="progress-bar" role="progressbar" style="width: ${currentTimerProgress}%;" aria-valuenow="${currentTimerProgress}" aria-valuemin="0" aria-valuemax="100">
-            ${currentTimerProgress}%
-          </div>
-        </div>
-        <small>${currentTimerRemaining} min remaining of ${currentTimerDuration} min</small>
-      `;
-      nextTimer.textContent = `${timers.next.name} (On Time: ${timers.next.on_time})`;
-      // Add entrance animation
-      liveContainer.classList.add('animate__animated', 'animate__fadeIn');
-    }
-    hideLoadingScreen();
-  }
-
-  // Fetch history data
-  async function fetchHistory() {
-    showLoadingScreen();
-    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
-    const labels = [];
-    const volt1 = [], volt2 = [], volt3 = [], curr1 = [], curr2 = [], curr3 = [];
-
-    snapshot.forEach(doc => {
-      const data = doc.data().summary.live_data;
-      labels.push(doc.data().timestamp);
-      volt1.push(data.voltage_phase_1 || 0);
-      volt2.push(data.voltage_phase_2 || 0);
-      volt3.push(data.voltage_phase_3 || 0);
-      curr1.push(data.current_phase_1 || 0);
-      curr2.push(data.current_phase_2 || 0);
-      curr3.push(data.current_phase_3 || 0);
-    });
-
-    const voltageCtx = document.getElementById('voltage-chart').getContext('2d');
-    new Chart(voltageCtx, {
-      type: 'line',
-      data: {
-        labels: labels.reverse(),
-        datasets: [
-          { label: 'Phase 1', data: volt1.reverse(), borderColor: 'red' },
-          { label: 'Phase 2', data: volt2.reverse(), borderColor: 'blue' },
-          { label: 'Phase 3', data: volt3.reverse(), borderColor: 'green' }
-        ]
-      }
-    });
-
-    const currentCtx = document.getElementById('current-chart').getContext('2d');
-    new Chart(currentCtx, {
-      type: 'line',
-      data: {
-        labels: labels.reverse(),
-        datasets: [
-          { label: 'Phase 1', data: curr1.reverse(), borderColor: 'orange' },
-          { label: 'Phase 2', data: curr2.reverse(), borderColor: 'purple' },
-          { label: 'Phase 3', data: curr3.reverse(), borderColor: 'teal' }
-        ]
-      }
-    });
-    hideLoadingScreen();
-  }
-
-  function drawGauge(canvasId, value, maxValue, color) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) {
-      console.error(`Canvas with ID '${canvasId}' not found.`);
-      return;
-    }
-    const ctx = canvas.getContext('2d');
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const radius = Math.min(centerX, centerY) - 10;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw background arc
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.25 * Math.PI, false);
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = '#e0e0e0';
-    ctx.stroke();
-
-    // Draw value arc
-    const endAngle = 0.75 * Math.PI + (value / maxValue) * (1.5 * Math.PI);
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, endAngle, false);
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-
-    // Draw text
-    ctx.font = '16px Arial';
-    ctx.fillStyle = '#333';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`${value} bar`, centerX, centerY); // Display value in bar
-  }
-
-  // Update pressure difference bar and value
-  function updatePressureDifference(inputPressure, outputPressure) {
-    const difference = Math.abs(inputPressure - outputPressure);
-    const maxDifference = 3; // Assuming max difference is 6 bar
-    const percentage = Math.min((difference / maxDifference) * 100, 100);
-    const bar = document.getElementById('pressure-difference-bar');
-    const valueDisplay = document.getElementById('pressure-difference-value');
-
-    bar.style.width = `${percentage}%`;
-    bar.ariaValueNow = percentage;
-    valueDisplay.textContent = `${difference.toFixed(2)} bar`;
-
-    // Set color based on intensity
-    if (difference <= 0.2) {
-      bar.className = 'progress-bar bg-success'; // Low intensity
-    } else if (difference > 0.2 && difference <= 0.9) {
-      bar.className = 'progress-bar bg-warning'; // Good intensity
-    } else if (difference > 0.9 && difference <= 2) {
-      bar.className = 'progress-bar bg-danger'; // Bad intensity
-    } else {
-      bar.className = 'progress-bar bg-dark'; // Extreme cases
-    }
-  }
-
-  // Dashboard Overview
-  async function populateDashboardOverview() {
-    showLoadingScreen();
-    const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
-    if (!snapshot.empty) {
-      const data = snapshot.docs[0].data();
-      const live = data.summary.live_data || {};
-
-      // Update last updated time
-      const serverTime = data.summary.device_info.server_time || 'N/A';
-      document.getElementById('last-updated-time').textContent = `Last updated: ${serverTime}`;
-
-      // Update voltage and current boxes
-      document.getElementById('voltage-phase-1-box').textContent = `${live.voltage_phase_1 ?? 'N/A'} V`;
-      document.getElementById('current-phase-1-box').textContent = `${live.current_phase_1 ?? 'N/A'} A`;
-
-      document.getElementById('voltage-phase-2-box').textContent = `${live.voltage_phase_2 ?? 'N/A'} V`;
-      document.getElementById('current-phase-2-box').textContent = `${live.current_phase_2 ?? 'N/A'} A`;
-
-      document.getElementById('voltage-phase-3-box').textContent = `${live.voltage_phase_3 ?? 'N/A'} V`;
-      document.getElementById('current-phase-3-box').textContent = `${live.current_phase_3 ?? 'N/A'} A`;
-
-      // Update pressure gauges
-      const inputPressure = parseFloat(live.pressure_in) || 0;
-      const outputPressure = parseFloat(live.pressure_out) || 0;
-      drawGauge('input-pressure-gauge', inputPressure, 6, '#007bff'); // Max value set to 6 bar
-      drawGauge('output-pressure-gauge', outputPressure, 6, '#28a745'); // Max value set to 6 bar
-
-      // Update pressure difference
-      updatePressureDifference(inputPressure, outputPressure);
-
-      // Update pressure flow bar visuals
-      const inputFlow = document.getElementById('input-flow');
-      const outputFlow = document.getElementById('output-flow');
-      if (inputFlow && outputFlow) {
-        inputFlow.style.width = `${Math.min((inputPressure / 100) * 100, 100)}%`;
-        outputFlow.style.width = `${Math.min((outputPressure / 100) * 100, 100)}%`;
-      }
-
-      const timers = data.summary.timers;
-
-      // Update timer text
-      document.getElementById('dashboard-current-timer').textContent = `${timers.current.name} (${timers.current.remaining_time} min)`;
-
-      // Enhanced visuals for Sump Status
-      const motorImage = document.getElementById('motor-image');
-      if (live.sump_status === 'On') {
-        motorImage.src = 'images/motor-on.png';
-      } else {
-        motorImage.src = 'images/motor-off.png';
-      }
-
-      // Enhanced visuals for Current Timer
-      const timerImage = document.getElementById('timer-image');
-      let timerName = timers.current.name?.toLowerCase() || '';
-      if (timerName.includes('coco')) {
-        timerImage.src = 'images/coconut.png';
-      } else if (timerName.includes('mango')) {
-        timerImage.src = 'images/mango.png';
-      } else if (timerName.includes('house')) {
-        timerImage.src = 'images/house.png';
-      } else if (timerName.includes('jamun')) {
-        timerImage.src = 'images/jamun.png';
-      } else if (timerName.includes('amla')) {
-        timerImage.src = 'images/amla.png';
-      } else if (timerName.includes('backwash')) {
-        timerImage.src = 'images/backwash.png';
-      } else if (timerName.includes('grass')) {
-        timerImage.src = 'images/grass.png';
-      } else if (timerName.includes('guava')) {
-        timerImage.src = 'images/guava.png';
-      } else if (timerName.includes('onion')) {
-        timerImage.src = 'images/onion.png';
-      } else if (timerName.includes('pome')) {
-        timerImage.src = 'images/pomen.png';
-      } else {
-        timerImage.src = 'images/timer-default.png';
-      }
-    } else {
-      console.error("No data found for today's date.");
-    }
-    hideLoadingScreen();
-  }
-
-  async function fetchPressureHistory() {
-    showLoadingScreen();
-    const snapshot = await db.collection('irrigation_devices')
-      .doc('MCON874Q000568')
-      .collection(new Date().toISOString().split('T')[0])
-      .orderBy('timestamp', 'desc')
-      .limit(100) // Fetch more data points
-      .get();
-
-    const labels = [], inputPressures = [], outputPressures = [], pressureDifferences = [];
-
-    snapshot.forEach(doc => {
-      const data = doc.data().summary.live_data;
-      const inputPressure = parseFloat(data.pressure_in) || 0;
-      const outputPressure = parseFloat(data.pressure_out) || 0;
-      labels.push(new Date(doc.data().timestamp).toLocaleTimeString());
-      inputPressures.push(inputPressure);
-      outputPressures.push(outputPressure);
-      pressureDifferences.push(Math.abs(inputPressure - outputPressure)); // Calculate difference
-    });
-
-    const pressureCtx = document.getElementById('pressure-chart').getContext('2d');
-    new Chart(pressureCtx, {
-      type: 'line',
-      data: {
-        labels: labels.reverse(),
-        datasets: [
-          {
-            label: 'Input Pressure',
-            data: inputPressures.reverse(),
-            borderColor: 'navy',
-            fill: false,
-            tension: 0.4
-          },
-          {
-            label: 'Output Pressure',
-            data: outputPressures.reverse(),
-            borderColor: 'darkred',
-            fill: false,
-            tension: 0.4
-          },
-          {
-            label: 'Pressure Difference',
-            data: pressureDifferences.reverse(),
-            borderColor: 'green',
-            fill: false,
-            tension: 0.4
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'top'
-          },
-          tooltip: {
-            mode: 'index',
-            intersect: false
-          }
-        },
-        scales: {
-          x: {
-            title: {
-              display: true,
-              text: 'Time'
-            }
-          },
-          y: {
-            title: {
-              display: true,
-              text: 'Pressure (bar)'
-            },
-            beginAtZero: true
-          }
-        }
-      }
-    });
-    hideLoadingScreen();
-  }
-
-  // Timer History (Timeline)
-  async function fetchTimerHistory(startDate, endDate) {
-    showLoadingScreen();
-    const container = document.getElementById('timer-history-data');
-    container.innerHTML = ''; // Clear previous content
-    const timeline = document.createElement('div');
-    timeline.className = 'timeline';
-    container.appendChild(timeline);
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // Include the entire end date
-
-    const seenTimers = new Set();
-
-    while (start <= end) {
-      const dateString = start.toISOString().split('T')[0];
-      const snapshot = await db.collection('irrigation_devices')
-        .doc('MCON874Q000568')
-        .collection(dateString)
-        .orderBy('timestamp', 'desc')
-        .get();
-
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const timers = data.summary.timers;
-
-        if (timers && timers.current && timers.current.name) {
-          const key = `${timers.current.name}-${timers.current.number}`;
-          if (!seenTimers.has(key)) {
-            seenTimers.add(key);
-
-            const item = document.createElement('div');
-            item.className = 'timeline-item';
-            item.innerHTML = `
-              <div class="card">
-                <div class="card-body">
-                  <h5 class="card-title">${timers.current.name}</h5>
-                  <p><strong>Run Time:</strong> ${timers.current.run_time} minutes</p>
-                  <p><strong>Remaining Time:</strong> ${timers.current.remaining_time} minutes</p>
-                  <p><strong>Completed:</strong> ${timers.current.completed ? 'Yes' : 'No'}</p>
-                  <p><strong>Start Time:</strong> ${timers.current.start_time}</p>
-                  <p><strong>Timestamp:</strong> ${new Date(doc.data().timestamp).toLocaleString()}</p>
-                </div>
-              </div>
-            `;
-            timeline.appendChild(item);
-          }
-        }
-      });
-
-      start.setDate(start.getDate() + 1); // Move to the next day
-    }
-    hideLoadingScreen();
-  }
-
-  document.getElementById('fetch-timer-history').addEventListener('click', () => {
-    const startDate = document.getElementById('start-date').value;
-    const endDate = document.getElementById('end-date').value;
-
-    if (startDate && endDate) {
-      fetchTimerHistory(startDate, endDate);
-    } else {
-      alert('Please select both start and end dates.');
-    }
-  });
-
-  async function fetchTimerPressureHistory(startDate, endDate) {
-    showLoadingScreen();
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999); // Include the entire end date
-
-    const timerData = {};
-
-    while (start <= end) {
-      const dateString = start.toISOString().split('T')[0];
-      const snapshot = await db.collection('irrigation_devices')
-        .doc('MCON874Q000568')
-        .collection(dateString)
-        .orderBy('timestamp', 'asc')
-        .get();
-
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const timers = data.summary.timers;
-        const live = data.summary.live_data;
-
-        if (timers && timers.current && live) {
-          const timerName = timers.current.name;
-          if (!timerData[timerName]) {
-            timerData[timerName] = {
-              totalRunTime: 0,
-              totalInputPressure: 0,
-              totalOutputPressure: 0,
-              totalPressureDifference: 0,
-              count: 0,
-              startTime: null,
-              endTime: null
-            };
-          }
-
-          const inputPressure = parseFloat(live.pressure_in) || 0;
-          const outputPressure = parseFloat(live.pressure_out) || 0;
-          const pressureDifference = Math.abs(inputPressure - outputPressure);
-
-          timerData[timerName].totalRunTime += parseInt(timers.current.run_time) || 0;
-          timerData[timerName].totalInputPressure += inputPressure;
-          timerData[timerName].totalOutputPressure += outputPressure;
-          timerData[timerName].totalPressureDifference += pressureDifference;
-          timerData[timerName].count += 1;
-
-          const timestamp = new Date(doc.data().timestamp);
-          if (!timerData[timerName].startTime || timestamp < timerData[timerName].startTime) {
-            timerData[timerName].startTime = timestamp;
-          }
-          if (!timerData[timerName].endTime || timestamp > timerData[timerName].endTime) {
-            timerData[timerName].endTime = timestamp;
-          }
-        }
-      });
-
-      start.setDate(start.getDate() + 1); // Move to the next day
-    }
-
-    const tableBody = document.getElementById('timer-pressure-history-table-body');
-    tableBody.innerHTML = ''; // Clear previous content
-
-    Object.entries(timerData).forEach(([timerName, data]) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${timerName}</td>
-        <td>${(data.totalInputPressure / data.count).toFixed(2)}</td>
-        <td>${(data.totalOutputPressure / data.count).toFixed(2)}</td>
-        <td>${(data.totalPressureDifference / data.count).toFixed(2)}</td>
-        <td>${data.startTime.toLocaleString()}</td>
-        <td>${data.endTime.toLocaleString()}</td>
-      `;
-      tableBody.appendChild(row);
-    });
-    hideLoadingScreen();
-  }
-
-  document.getElementById('fetch-timer-pressure-history').addEventListener('click', () => {
-    const startDate = document.getElementById('start-date-pressure').value;
-    const endDate = document.getElementById('end-date-pressure').value;
-
-    if (startDate && endDate) {
-      fetchTimerPressureHistory(startDate, endDate);
-    } else {
-      alert('Please select both start and end dates.');
-    }
-  });
-
-  // Run on load
-  populateDashboardOverview();
-  fetchPressureHistory();
-  fetchTimerHistory(); // Fetch once on load
-  fetchTimerPressureHistory(); // Fetch once on load
-
-  // Refresh data every minute (excluding timer history and timer pressure history)
-  setInterval(() => {
-    fetchLiveData();
-    fetchHistory();
-    populateDashboardOverview();
-    fetchPressureHistory();
-  }, 60000); // Refresh every 1 minute
-</script>
-
+<script src="main.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
