@@ -252,10 +252,10 @@ async function populateDashboardOverview() {
     const motorStatusText = document.getElementById('motor-status-text');
     if (live.sump_status === 'On') {
       motorImage.src = 'images/motor-on.png';
-      if (motorStatusText) motorStatusText.textContent = 'On';
+      if (motorStatusText) motorStatusText.innerHTML = '<span style="font-size:2rem;font-weight:bold;">On</span>';
     } else {
       motorImage.src = 'images/motor-off.png';
-      if (motorStatusText) motorStatusText.textContent = 'Off';
+      if (motorStatusText) motorStatusText.innerHTML = '<span style="font-size:2rem;font-weight:bold;">Off</span>';
     }
 
     // --- Begin: Timer image selection based on open valve(s) ---
@@ -628,10 +628,15 @@ fetchPressureHistory();
 fetchTimerHistory(); // Fetch once on load
 fetchTimerPressureHistory(); // Fetch once on load
 
-// Refresh data every minute (excluding timer history and timer pressure history)
-setInterval(() => {
-  fetchLiveData();
-  fetchHistory();
-  populateDashboardOverview();
-  fetchPressureHistory();
-}, 60000); // Refresh every 1 minute
+// Replace the setInterval section with Firestore real-time listener:
+const todayCollection = db.collection('irrigation_devices')
+  .doc('MCON874Q000568')
+  .collection(new Date().toISOString().split('T')[0]);
+
+todayCollection.orderBy('timestamp', 'desc').limit(1)
+  .onSnapshot(() => {
+    fetchLiveData();
+    fetchHistory();
+    populateDashboardOverview();
+    fetchPressureHistory();
+  });
