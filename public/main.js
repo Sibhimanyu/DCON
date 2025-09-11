@@ -430,9 +430,18 @@ async function fetchTimerHistory() {
       return;
     }
 
-    const filteredLogs = timerName
-      ? logs.filter(log => log.timer_name === timerName) // Filter logs by selected timer name
-      : logs;
+    const filteredLogs = timerName ? logs.filter((log, index) => {
+      if (log.timer_name === timerName) return true;
+      
+      // Check if previous log was the selected timer and was incomplete
+      if (index > 0 && 
+          logs[index - 1].timer_name === timerName && 
+          logs[index - 1].completed === '0' &&
+          log.timer_name.toLowerCase().includes('backwash')) {
+        return true;
+      }
+      return false;
+    }) : logs;
 
     if (filteredLogs.length === 0) {
       timerHistoryContent.innerHTML = '<p class="text-center text-muted">No timer history available for the selected timer.</p>';
@@ -444,7 +453,8 @@ async function fetchTimerHistory() {
     table.innerHTML = `
       <thead>
         <tr>
-          <th>Date/Time</th>
+          <th>Start Time</th>
+          <th>End Time</th>
           <th>Timer Name</th>
           <th>Run Time</th>
           <th>Valves</th>
@@ -455,6 +465,7 @@ async function fetchTimerHistory() {
         ${filteredLogs.map(log => `
           <tr style="cursor: pointer;">
             <td>${log.dt}</td>
+            <td>${log.last_sync}</td>
             <td>${log.timer_name}</td>
             <td>${log.run_time}</td>
             <td>${log.on_valves}</td>
@@ -471,7 +482,11 @@ async function fetchTimerHistory() {
       const graphButton = document.createElement('button');
       graphButton.className = 'btn btn-primary mt-3';
       graphButton.textContent = `Graph Pressures for "${timerName}"`;
-      graphButton.addEventListener('click', () => graphAllPressures(filteredLogs));
+      graphButton.addEventListener('click', () => {
+        graphAllPressures(filteredLogs);
+        const pressureModal = new bootstrap.Modal(document.getElementById('pressureModal'));
+        pressureModal.show();
+      });
       timerHistoryContent.appendChild(graphButton);
     }
 
@@ -482,15 +497,73 @@ async function fetchTimerHistory() {
   }
 }
 
-function graphAllPressures(logs) {
+async function graphAllPressures(logs) {
+  alert(logs.length);
+  alert(JSON.stringify(logs));
   const chartContainer = document.getElementById('pressure-chart-container');
   chartContainer.innerHTML = '<p class="text-muted">Loading pressure data...</p>';
 
   try {
-    // Prepare data for Chart.js
-    const labels = logs.map(log => log.dt);
-    const inputPressures = logs.map(log => parseFloat(log.pressure_in) || 0);
-    const outputPressures = logs.map(log => parseFloat(log.pressure_out) || 0);
+    // Fetch pressure data for each timer segment
+    const pressureDataPromises = logs.map(async log => {
+
+      const striii = `https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(log.dt)}&to=${encodeURIComponent(log.last_sync)}&product=DCON`;
+      alert(striii);
+      const response = await fetch(striii);
+      if (!response.ok) throw new Error('Failed to fetch pressure data');
+      const data = await response.json();
+      return {
+        timestamp: log.dt,
+        data: data.data || []
+      };
+    });
+
+    const allPressureData = await Promise.all(pressureDataPromises);
+    
+    // Prepare datasets for each timer segment
+    const datasets = [];
+    let allPressureValues = [];
+    
+    allPressureData.forEach((segment, index) => {
+      if (segment.data.length > 0) {
+        const segmentColor = `hsl(${index * (360 / allPressureData.length)}, 70%, 50%)`;
+        
+        // Extract pressure values
+        const inputValues = segment.data.map(entry => parseFloat(entry.pressure.split('-')[0]));
+        const outputValues = segment.data.map(entry => parseFloat(entry.pressure.split('-')[1]));
+        allPressureValues = [...allPressureValues, ...inputValues, ...outputValues];
+
+        datasets.push(
+          {
+            label: `Input Pressure (${segment.timestamp})`,
+            data: segment.data.map(entry => ({
+              x: entry.dt,
+              y: parseFloat(entry.pressure.split('-')[0])
+            })),
+            borderColor: segmentColor,
+            backgroundColor: segmentColor,
+            fill: false,
+            segment: segment.timestamp
+          },
+          {
+            label: `Output Pressure (${segment.timestamp})`,
+            data: segment.data.map(entry => ({
+              x: entry.dt,
+              y: parseFloat(entry.pressure.split('-')[1])
+            })),
+            borderColor: segmentColor,
+            backgroundColor: segmentColor,
+            fill: false,
+            segment: segment.timestamp,
+            borderDash: [5, 5]
+          }
+        );
+      }
+    });
+    
+    // Calculate min/max pressure values
+    const minPressure = Math.max(0, Math.floor(Math.min(...allPressureValues.filter(p => p > 0)) - 0.5));
+    const maxPressure = Math.ceil(Math.max(...allPressureValues) + 0.5);
 
     // Create chart
     chartContainer.innerHTML = '<canvas id="pressure-chart" style="max-width: 100%; height: 500px;"></canvas>';
@@ -498,31 +571,41 @@ function graphAllPressures(logs) {
     new Chart(ctx, {
       type: 'line',
       data: {
-        labels,
-        datasets: [
-          {
-            label: 'Input Pressure (bar)',
-            data: inputPressures,
-            borderColor: '#007bff',
-            fill: false,
-          },
-          {
-            label: 'Output Pressure (bar)',
-            data: outputPressures,
-            borderColor: '#28a745',
-            fill: false,
-          }
-        ]
+        datasets: datasets
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: { position: 'top' },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+          }
+        },
+        interaction: {
+          mode: 'nearest',
+          axis: 'x',
+          intersect: false
         },
         scales: {
-          x: { title: { display: true, text: 'Timestamp' } },
-          y: { title: { display: true, text: 'Pressure (bar)' } }
+          x: { 
+            title: { display: true, text: 'Timestamp' },
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          },
+          y: { 
+            title: { display: true, text: 'Pressure (bar)' },
+            min: minPressure,
+            max: maxPressure,
+            ticks: {
+              stepSize: 0.5
+            },
+            grid: {
+              color: 'rgba(0,0,0,0.1)'
+            }
+          }
         }
       }
     });
@@ -598,7 +681,7 @@ function attachTimerClickHandlers() {
   timerRows.forEach(row => {
     row.addEventListener('click', () => {
       const from = row.cells[0].textContent.trim();
-      const to = row.nextElementSibling?.cells[0]?.textContent.trim() || from; // Use next row's timestamp or same row
+      const to = row.cells[1].textContent.trim(); // Use next row's timestamp or same row
       fetchPressureData(from, to);
       const pressureModal = new bootstrap.Modal(document.getElementById('pressureModal'));
       pressureModal.show();
