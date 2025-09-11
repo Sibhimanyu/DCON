@@ -58,50 +58,6 @@ async function fetchLiveData() {
   }
 }
 
-// Fetch history data
-async function fetchHistory() {
-  const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(20).get();
-  const labels = [];
-  const volt1 = [], volt2 = [], volt3 = [], curr1 = [], curr2 = [], curr3 = [];
-
-  snapshot.forEach(doc => {
-    const data = doc.data().summary.live_data;
-    labels.push(doc.data().timestamp);
-    volt1.push(data.voltage_phase_1 || 0);
-    volt2.push(data.voltage_phase_2 || 0);
-    volt3.push(data.voltage_phase_3 || 0);
-    curr1.push(data.current_phase_1 || 0);
-    curr2.push(data.current_phase_2 || 0);
-    curr3.push(data.current_phase_3 || 0);
-  });
-
-  const voltageCtx = document.getElementById('voltage-chart').getContext('2d');
-  new Chart(voltageCtx, {
-    type: 'line',
-    data: {
-      labels: labels.reverse(),
-      datasets: [
-        { label: 'Phase 1', data: volt1.reverse(), borderColor: 'red' },
-        { label: 'Phase 2', data: volt2.reverse(), borderColor: 'blue' },
-        { label: 'Phase 3', data: volt3.reverse(), borderColor: 'green' }
-      ]
-    }
-  });
-
-  const currentCtx = document.getElementById('current-chart').getContext('2d');
-  new Chart(currentCtx, {
-    type: 'line',
-    data: {
-      labels: labels.reverse(),
-      datasets: [
-        { label: 'Phase 1', data: curr1.reverse(), borderColor: 'orange' },
-        { label: 'Phase 2', data: curr2.reverse(), borderColor: 'purple' },
-        { label: 'Phase 3', data: curr3.reverse(), borderColor: 'teal' }
-      ]
-    }
-  });
-}
-
 function drawGauge(canvasId, value, maxValue, color) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) {
@@ -392,251 +348,279 @@ async function populateDashboardOverview() {
   }
 }
 
-async function fetchPressureHistory() {
-  const snapshot = await db.collection('irrigation_devices')
-    .doc('MCON874Q000568')
-    .collection(new Date().toISOString().split('T')[0])
-    .orderBy('timestamp', 'desc')
-    .limit(100) // Fetch more data points
-    .get();
+// Timer History
+function getTodayDate() {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+}
 
-  const labels = [], inputPressures = [], outputPressures = [], pressureDifferences = [];
+async function populateTimerDropdown() {
+  const timerDropdown = document.getElementById('history-timer-name-dropdown');
+  timerDropdown.innerHTML = '<option value="">All Timers</option>'; // Default option
 
-  snapshot.forEach(doc => {
-    const data = doc.data().summary.live_data;
-    const inputPressure = parseFloat(data.pressure_in) || 0;
-    const outputPressure = parseFloat(data.pressure_out) || 0;
-    labels.push(new Date(doc.data().timestamp).toLocaleTimeString());
-    inputPressures.push(inputPressure);
-    outputPressures.push(outputPressure);
-    pressureDifferences.push(Math.abs(inputPressure - outputPressure)); // Calculate difference
-  });
-
-  const pressureCtx = document.getElementById('pressure-chart').getContext('2d');
-  new Chart(pressureCtx, {
-    type: 'line',
-    data: {
-      labels: labels.reverse(),
-      datasets: [
-        {
-          label: 'Input Pressure',
-          data: inputPressures.reverse(),
-          borderColor: 'navy',
-          fill: false,
-          tension: 0.4
-        },
-        {
-          label: 'Output Pressure',
-          data: outputPressures.reverse(),
-          borderColor: 'darkred',
-          fill: false,
-          tension: 0.4
-        },
-        {
-          label: 'Pressure Difference',
-          data: pressureDifferences.reverse(),
-          borderColor: 'green',
-          fill: false,
-          tension: 0.4
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'top'
-        },
-        tooltip: {
-          mode: 'index',
-          intersect: false
-        }
+  try {
+    const response = await fetch('https://dcon.mobitechwireless.com/v1/http/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: 'Time'
-          }
-        },
-        y: {
-          title: {
-            display: true,
-            text: 'Pressure (bar)'
-          },
-          beginAtZero: true
-        }
-      }
+      body: new URLSearchParams({
+        action: 'logs',
+        method: 'timer_log',
+        serial_no: 'MCON874Q000568',
+        from: getTodayDate(),
+        to: getTodayDate()
+      })
+    });
+
+    if (!response.ok) throw new Error('Failed to fetch timer data');
+
+    const data = await response.json();
+    const logs = data.log || [];
+
+    // Extract unique timer names
+    const uniqueTimers = [...new Set(logs.map(log => log.timer_name))];
+
+    uniqueTimers.forEach(timerName => {
+      const option = document.createElement('option');
+      option.value = timerName;
+      option.textContent = timerName;
+      timerDropdown.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Failed to populate timer dropdown:', error);
+  }
+}
+
+async function fetchTimerHistory() {
+  const timerHistoryContent = document.getElementById('timer-history-content');
+  const fromDateInput = document.getElementById('history-from-date');
+  const toDateInput = document.getElementById('history-to-date');
+  const timerDropdown = document.getElementById('history-timer-name-dropdown'); // Dropdown for timer name
+
+  const fromDate = fromDateInput.value || getTodayDate();
+  const toDate = toDateInput.value || getTodayDate();
+  const timerName = timerDropdown.value; // Get selected timer name
+
+  timerHistoryContent.innerHTML = '<p class="text-center text-muted">Loading timer history...</p>';
+
+  try {
+    const response = await fetch('https://dcon.mobitechwireless.com/v1/http/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        action: 'logs',
+        method: 'timer_log',
+        serial_no: 'MCON874Q000568',
+        from: fromDate,
+        to: toDate,
+        ...(timerName && { timer_name: timerName }) // Include timer name filter if selected
+      })
+    });
+
+    if (!response.ok) throw new Error('Failed to fetch timer history');
+
+    const data = await response.json();
+    const logs = data.log || [];
+
+    if (logs.length === 0) {
+      timerHistoryContent.innerHTML = '<p class="text-center text-muted">No timer history available for the selected date range.</p>';
+      return;
     }
-  });
-}
 
-// Timer History (Timeline)
-async function fetchTimerHistory(startDate, endDate) {
-  const container = document.getElementById('timer-history-data');
-  container.innerHTML = ''; // Clear previous content
-  const timeline = document.createElement('div');
-  timeline.className = 'timeline';
-  container.appendChild(timeline);
+    const filteredLogs = timerName
+      ? logs.filter(log => log.timer_name === timerName) // Filter logs by selected timer name
+      : logs;
 
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999); // Include the entire end date
+    if (filteredLogs.length === 0) {
+      timerHistoryContent.innerHTML = '<p class="text-center text-muted">No timer history available for the selected timer.</p>';
+      return;
+    }
 
-  const seenTimers = new Set();
-
-  while (start <= end) {
-    const dateString = start.toISOString().split('T')[0];
-    const snapshot = await db.collection('irrigation_devices')
-      .doc('MCON874Q000568')
-      .collection(dateString)
-      .orderBy('timestamp', 'desc')
-      .get();
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const timers = data.summary.timers;
-
-      if (timers && timers.current && timers.current.name) {
-        const key = `${timers.current.name}-${timers.current.number}`;
-        if (!seenTimers.has(key)) {
-          seenTimers.add(key);
-
-          const item = document.createElement('div');
-          item.className = 'timeline-item';
-          item.innerHTML = `
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">${timers.current.name}</h5>
-                <p><strong>Run Time:</strong> ${timers.current.run_time} minutes</p>
-                <p><strong>Remaining Time:</strong> ${timers.current.remaining_time} minutes</p>
-                <p><strong>Completed:</strong> ${timers.current.completed ? 'Yes' : 'No'}</p>
-                <p><strong>Start Time:</strong> ${timers.current.start_time}</p>
-                <p><strong>Timestamp:</strong> ${new Date(doc.data().timestamp).toLocaleString()}</p>
-              </div>
-            </div>
-          `;
-          timeline.appendChild(item);
-        }
-      }
-    });
-
-    start.setDate(start.getDate() + 1); // Move to the next day
-  }
-}
-
-document.getElementById('fetch-timer-history').addEventListener('click', () => {
-  const startDate = document.getElementById('start-date').value;
-  const endDate = document.getElementById('end-date').value;
-
-  if (startDate && endDate) {
-    fetchTimerHistory(startDate, endDate);
-  } else {
-    alert('Please select both start and end dates.');
-  }
-});
-
-async function fetchTimerPressureHistory(startDate, endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999); // Include the entire end date
-
-  const timerData = {};
-
-  while (start <= end) {
-    const dateString = start.toISOString().split('T')[0];
-    const snapshot = await db.collection('irrigation_devices')
-      .doc('MCON874Q000568')
-      .collection(dateString)
-      .orderBy('timestamp', 'asc')
-      .get();
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const timers = data.summary.timers;
-      const live = data.summary.live_data;
-
-      if (timers && timers.current && live) {
-        const timerName = timers.current.name;
-        if (!timerData[timerName]) {
-          timerData[timerName] = {
-            totalRunTime: 0,
-            totalInputPressure: 0,
-            totalOutputPressure: 0,
-            totalPressureDifference: 0,
-            count: 0,
-            startTime: null,
-            endTime: null
-          };
-        }
-
-        const inputPressure = parseFloat(live.pressure_in) || 0;
-        const outputPressure = parseFloat(live.pressure_out) || 0;
-        const pressureDifference = Math.abs(inputPressure - outputPressure);
-
-        timerData[timerName].totalRunTime += parseInt(timers.current.run_time) || 0;
-        timerData[timerName].totalInputPressure += inputPressure;
-        timerData[timerName].totalOutputPressure += outputPressure;
-        timerData[timerName].totalPressureDifference += pressureDifference;
-        timerData[timerName].count += 1;
-
-        const timestamp = new Date(doc.data().timestamp);
-        if (!timerData[timerName].startTime || timestamp < timerData[timerName].startTime) {
-          timerData[timerName].startTime = timestamp;
-        }
-        if (!timerData[timerName].endTime || timestamp > timerData[timerName].endTime) {
-          timerData[timerName].endTime = timestamp;
-        }
-      }
-    });
-
-    start.setDate(start.getDate() + 1); // Move to the next day
-  }
-
-  const tableBody = document.getElementById('timer-pressure-history-table-body');
-  tableBody.innerHTML = ''; // Clear previous content
-
-  Object.entries(timerData).forEach(([timerName, data]) => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${timerName}</td>
-      <td>${(data.totalInputPressure / data.count).toFixed(2)}</td>
-      <td>${(data.totalOutputPressure / data.count).toFixed(2)}</td>
-      <td>${(data.totalPressureDifference / data.count).toFixed(2)}</td>
-      <td>${data.startTime.toLocaleString()}</td>
-      <td>${data.endTime.toLocaleString()}</td>
+    const table = document.createElement('table');
+    table.className = 'table table-striped table-bordered';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Date/Time</th>
+          <th>Timer Name</th>
+          <th>Run Time</th>
+          <th>Valves</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filteredLogs.map(log => `
+          <tr style="cursor: pointer;">
+            <td>${log.dt}</td>
+            <td>${log.timer_name}</td>
+            <td>${log.run_time}</td>
+            <td>${log.on_valves}</td>
+            <td>${log.completed === '1' ? 'Yes' : 'No'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
     `;
-    tableBody.appendChild(row);
+    timerHistoryContent.innerHTML = '';
+    timerHistoryContent.appendChild(table);
+
+    // Add a button to graph all pressures for the filtered timer
+    if (timerName) {
+      const graphButton = document.createElement('button');
+      graphButton.className = 'btn btn-primary mt-3';
+      graphButton.textContent = `Graph Pressures for "${timerName}"`;
+      graphButton.addEventListener('click', () => graphAllPressures(filteredLogs));
+      timerHistoryContent.appendChild(graphButton);
+    }
+
+    attachTimerClickHandlers();
+  } catch (error) {
+    console.error(error);
+    timerHistoryContent.innerHTML = '<p class="text-center text-danger">Failed to load timer history.</p>';
+  }
+}
+
+function graphAllPressures(logs) {
+  const chartContainer = document.getElementById('pressure-chart-container');
+  chartContainer.innerHTML = '<p class="text-muted">Loading pressure data...</p>';
+
+  try {
+    // Prepare data for Chart.js
+    const labels = logs.map(log => log.dt);
+    const inputPressures = logs.map(log => parseFloat(log.pressure_in) || 0);
+    const outputPressures = logs.map(log => parseFloat(log.pressure_out) || 0);
+
+    // Create chart
+    chartContainer.innerHTML = '<canvas id="pressure-chart" style="max-width: 100%; height: 500px;"></canvas>';
+    const ctx = document.getElementById('pressure-chart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Input Pressure (bar)',
+            data: inputPressures,
+            borderColor: '#007bff',
+            fill: false,
+          },
+          {
+            label: 'Output Pressure (bar)',
+            data: outputPressures,
+            borderColor: '#28a745',
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+        },
+        scales: {
+          x: { title: { display: true, text: 'Timestamp' } },
+          y: { title: { display: true, text: 'Pressure (bar)' } }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Failed to graph pressures:', error);
+    chartContainer.innerHTML = '<p class="text-danger">Failed to load pressure data.</p>';
+  }
+}
+
+async function fetchPressureData(from, to) {
+  const chartContainer = document.getElementById('pressure-chart-container');
+  chartContainer.innerHTML = '<p class="text-muted">Loading pressure data...</p>';
+
+  try {
+    const response = await fetch(`https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&product=DCON`);
+    if (!response.ok) throw new Error('Failed to fetch pressure data');
+
+    const data = await response.json();
+    const pressureData = data.data || [];
+
+    if (pressureData.length === 0) {
+      chartContainer.innerHTML = '<p class="text-muted">No pressure data available for the selected time period.</p>';
+      return;
+    }
+
+    // Prepare data for Chart.js
+    const labels = pressureData.map(entry => entry.dt);
+    const inputPressure = pressureData.map(entry => parseFloat(entry.pressure.split('-')[0]));
+    const outputPressure = pressureData.map(entry => parseFloat(entry.pressure.split('-')[1]));
+
+    // Create chart
+    chartContainer.innerHTML = '<canvas id="pressure-chart" style="max-width: 100%; height: 500px;"></canvas>'; // Increased height
+    const ctx = document.getElementById('pressure-chart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Input Pressure (bar)',
+            data: inputPressure,
+            borderColor: '#007bff',
+            fill: false,
+          },
+          {
+            label: 'Output Pressure (bar)',
+            data: outputPressure,
+            borderColor: '#28a745',
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false, // Allow chart to expand
+        plugins: {
+          legend: { position: 'top' },
+        },
+        scales: {
+          x: { title: { display: true, text: 'Timestamp' } },
+          y: { title: { display: true, text: 'Pressure (bar)' } }
+        }
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    chartContainer.innerHTML = '<p class="text-danger">Failed to load pressure data.</p>';
+  }
+}
+
+function attachTimerClickHandlers() {
+  const timerRows = document.querySelectorAll('#timer-history-content table tbody tr');
+  timerRows.forEach(row => {
+    row.addEventListener('click', () => {
+      const from = row.cells[0].textContent.trim();
+      const to = row.nextElementSibling?.cells[0]?.textContent.trim() || from; // Use next row's timestamp or same row
+      fetchPressureData(from, to);
+      const pressureModal = new bootstrap.Modal(document.getElementById('pressureModal'));
+      pressureModal.show();
+    });
   });
 }
 
-document.getElementById('fetch-timer-pressure-history').addEventListener('click', () => {
-  const startDate = document.getElementById('start-date-pressure').value;
-  const endDate = document.getElementById('end-date-pressure').value;
+// Dashboard Overview and Timer History fetch
+function fetchAllDashboardData() {
+  fetchLiveData();
+  populateDashboardOverview();
+  fetchTimerHistory();
+}
 
-  if (startDate && endDate) {
-    fetchTimerPressureHistory(startDate, endDate);
-  } else {
-    alert('Please select both start and end dates.');
-  }
+// Initial fetch
+fetchAllDashboardData();
+
+// Fetch every 5 minutes
+setInterval(fetchAllDashboardData, 5 * 60 * 1000);
+
+// Populate the timer dropdown on page load
+document.addEventListener('DOMContentLoaded', () => {
+  populateTimerDropdown();
+  document.getElementById('fetch-history-btn').addEventListener('click', fetchTimerHistory); // Attach fetch button event
 });
-
-// Run on load
-populateDashboardOverview();
-fetchPressureHistory();
-fetchTimerHistory(); // Fetch once on load
-fetchTimerPressureHistory(); // Fetch once on load
-
-// Replace the setInterval section with Firestore real-time listener:
-const todayCollection = db.collection('irrigation_devices')
-  .doc('MCON874Q000568')
-  .collection(new Date().toISOString().split('T')[0]);
-
-todayCollection.orderBy('timestamp', 'desc').limit(1)
-  .onSnapshot(() => {
-    fetchLiveData();
-    fetchHistory();
-    populateDashboardOverview();
-    fetchPressureHistory();
-  });

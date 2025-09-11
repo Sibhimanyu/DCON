@@ -22,6 +22,7 @@ const form_data = new URLSearchParams({
 
 const headers = {
   "Content-Type": "application/x-www-form-urlencoded",
+  "user-agent": "DCON/161 CFNetwork/3826.500.131 Darwin/24.5.0"
 };
 
 exports.fetchAndStoreIrrigationData = onSchedule("every 1 minutes", async (event) => {
@@ -93,14 +94,12 @@ exports.fetchAndStoreIrrigationData = onSchedule("every 1 minutes", async (event
       .collection(dateKey)
       .add({
         timestamp: now.toISOString(),
-        raw: jsonData,
         summary: {
-          device_id: deviceKey,
+          // device_id: deviceKey,
           device_info: {
-            version: deviceInfo.version || {},
             server_time: deviceInfo.server_time || null,
-            sim: deviceInfo.sim || null,
-            time_zone: deviceInfo.time_zone || null,
+            // sim: deviceInfo.sim || null,
+            // time_zone: deviceInfo.time_zone || null,
           },
           live_data: {
             pressure_in: pressureIn,
@@ -141,7 +140,7 @@ exports.fetchAndStoreIrrigationData = onSchedule("every 1 minutes", async (event
           fertilizer: fertilizer,
           weather_station: weatherStation,
           users: users,
-          emergency_shutdown: emergencyShutdown,
+          // emergency_shutdown: emergencyShutdown,
         }
       });
 
