@@ -1,6 +1,8 @@
+const cors = require("cors")({ origin: true });
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
+const { onRequest } = require("firebase-functions/v2/https");
 const axios = require("axios");
 
 initializeApp();
@@ -25,7 +27,7 @@ const headers = {
   "user-agent": "DCON/161 CFNetwork/3826.500.131 Darwin/24.5.0"
 };
 
-exports.fetchAndStoreIrrigationData = onSchedule("every 1 minutes", async (event) => {
+exports.fetchAndStoreIrrigationData = onSchedule("every 5 minutes", async (event) => {
   try {
     const response = await axios.post("https://dcon.mobitechwireless.com/v1/http/", form_data, { headers });
     const jsonData = response.data;
@@ -148,4 +150,102 @@ exports.fetchAndStoreIrrigationData = onSchedule("every 1 minutes", async (event
   } catch (error) {
     console.error("Error fetching or storing data:", error.response?.data || error.message);
   }
+});
+
+// Helper: Get today's fertigation log doc ref
+function getTodayDocRef(db) {
+  const currentDate = new Date().toISOString().split("T")[0];
+  return db.collection("irrigation_devices")
+           .doc("MCON874Q000568")
+           .collection(currentDate)
+           .doc("FERTIGATION_LOGS");
+}
+
+// Start Fertigation
+exports.startFertigation = onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      const notes = req.body.notes || "";
+      const startTime = new Date();
+      const log = {
+        quantity: "1 Tank",
+        notes,
+        startTime,
+        deviceId: "MCON874Q000568"
+      };
+
+      const dateRef = getTodayDocRef(db);
+      const doc = await dateRef.get();
+      let logs = [];
+
+      if (doc.exists) {
+        logs = doc.data().logs || [];
+
+        // Check if there's already an active log
+        const hasActiveLog = logs.some(l => !l.endTime);
+
+        if (hasActiveLog) {
+          return res.status(400).json({ success: false, message: "Fertigation already running" });
+        } else {
+          logs.push(log);
+        }
+      } else {
+        logs = [log];
+      }
+
+      await dateRef.set({ logs }, { merge: true });
+      res.json({ success: true, message: "Fertigation started", startTime });
+      try {
+        await axios.post(
+          "https://cliq.zoho.in/api/v2/channelsbyname/workerlogsh/message?zapikey=1001.206f6f66d7b8b1245e0513e3cd6cfafd.b4844f18747e01a15d27ed0639dedf2f",
+          { text: `🌿 Fertigation started at ${startTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}` }
+        );
+      } catch (notifyErr) {
+        console.error("Failed to notify Zoho Cliq (start):", notifyErr.message);
+      }
+    } catch (err) {
+      console.error("Error starting fertigation:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+});
+
+// Stop Fertigation
+exports.stopFertigation = onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      const endTime = new Date();
+      const dateRef = getTodayDocRef(db);
+      const doc = await dateRef.get();
+      if (!doc.exists) {
+        return res.status(400).json({ success: false, message: "No active fertigation log found" });
+      }
+
+      let logs = doc.data().logs || [];
+      let updated = false;
+      logs = logs.map(l => {
+        if (!l.endTime && !updated) {
+          updated = true;
+          return { ...l, endTime, duration: Math.round((endTime - l.startTime.toDate())/60000) };
+        }
+        return l;
+      });
+
+      await dateRef.set({ logs }, { merge: true });
+      res.json({ success: true, message: "Fertigation stopped", endTime });
+      try {
+        const lastLog = logs.find(l => l.endTime);
+        const duration = lastLog?.duration || "unknown";
+        await axios.post(
+          "https://cliq.zoho.in/api/v2/channelsbyname/workerlogsh/message?zapikey=1001.206f6f66d7b8b1245e0513e3cd6cfafd.b4844f18747e01a15d27ed0639dedf2f",
+          { text: `🛑 Fertigation stopped at ${endTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} (duration: ${duration} mins)` }
+        );
+      } catch (notifyErr) {
+        console.error("Failed to notify Zoho Cliq (stop):", notifyErr.message);
+      }
+    } catch (err) {
+      console.error("Error stopping fertigation:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
 });

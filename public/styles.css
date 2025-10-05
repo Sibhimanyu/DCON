@@ -161,3 +161,46 @@ h2 {
   background: linear-gradient(to right, #0af, #0cf);
   transition: all 0.3s ease;
 }
+
+/* Fertigation Logs Styles */
+#fertigation-logs .card {
+  margin-bottom: 20px;
+}
+
+#fertigation-history td {
+  vertical-align: middle;
+}
+
+#fertigation-form .form-control:disabled,
+#fertigation-form .form-select:disabled {
+  background-color: #e9ecef;
+  opacity: 0.8;
+}
+
+#fertigation-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.fertigation-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #6c757d;
+  transition: background-color 0.3s ease;
+}
+
+#fertigation-status-card {
+  transition: border 0.3s ease;
+}
+
+#fertigation-timer {
+  font-size: 1.1rem;
+  font-weight: 500;
+}

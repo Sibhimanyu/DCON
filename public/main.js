@@ -1,16 +1,3 @@
-// Firebase Config
-const firebaseConfig = {
-  apiKey: "AIzaSyCzS6245V48Mb-q91qpjqK2l8o87MJ9Hho",
-  authDomain: "mobitech-c93c0.firebaseapp.com",
-  projectId: "mobitech-c93c0",
-  storageBucket: "mobitech-c93c0.appspot.com",
-  messagingSenderId: "284819435696",
-  appId: "1:284819435696:web:933fae6a22a0b05ecdcb75",
-  measurementId: "G-M1KEW3J26N"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
 // Fetch live data
 async function fetchLiveData() {
   const liveContainer = document.getElementById('live-data');
@@ -124,6 +111,7 @@ async function populateDashboardOverview() {
   const snapshot = await db.collection('irrigation_devices').doc('MCON874Q000568').collection(new Date().toISOString().split('T')[0]).orderBy('timestamp', 'desc').limit(1).get();
   if (!snapshot.empty) {
     const data = snapshot.docs[0].data();
+    const valveDetails = data.summary.valve_details || {};
     const live = data.summary.live_data || {};
 
     // Update last updated time
@@ -221,7 +209,6 @@ async function populateDashboardOverview() {
     timerImagesDiv.style.flexWrap = 'wrap';
     timerImagesDiv.style.justifyContent = 'center';
     timerImagesDiv.innerHTML = '';
-    const valveDetails = data.summary.valve_details || {};
     let openValveNos = [];
     if (timers.current.valves) {
       const valveArr = timers.current.valves.split('-');
@@ -264,7 +251,7 @@ async function populateDashboardOverview() {
           imgSrc = 'images/backwash.png';
         } else if (valveName.includes('grass')) {
           imgSrc = 'images/grass.png';
-        } else if (valveName.includes('guava') || valveName.includes('gova')) {
+        } else if (valveName.includes('guava')) {
           imgSrc = 'images/guava.png';
         } else if (valveName.includes('onion')) {
           imgSrc = 'images/onion.png';
@@ -355,8 +342,10 @@ function getTodayDate() {
 }
 
 async function populateTimerDropdown() {
-  const timerDropdown = document.getElementById('history-timer-name-dropdown');
-  timerDropdown.innerHTML = '<option value="">All Timers</option>'; // Default option
+  const historyDropdown = document.getElementById('history-timer-name-dropdown');
+  const pressureDropdown = document.getElementById('pressure-timer-dropdown');
+  historyDropdown.innerHTML = '<option value="">All Timers</option>';
+  pressureDropdown.innerHTML = '<option value="">Select Timer</option>';
 
   try {
     const response = await fetch('https://dcon.mobitechwireless.com/v1/http/', {
@@ -382,10 +371,17 @@ async function populateTimerDropdown() {
     const uniqueTimers = [...new Set(logs.map(log => log.timer_name))];
 
     uniqueTimers.forEach(timerName => {
-      const option = document.createElement('option');
-      option.value = timerName;
-      option.textContent = timerName;
-      timerDropdown.appendChild(option);
+      // Add to history dropdown
+      const historyOption = document.createElement('option');
+      historyOption.value = timerName;
+      historyOption.textContent = timerName;
+      historyDropdown.appendChild(historyOption);
+      
+      // Add to pressure analysis dropdown
+      const pressureOption = document.createElement('option');
+      pressureOption.value = timerName;
+      pressureOption.textContent = timerName;
+      pressureDropdown.appendChild(pressureOption);
     });
   } catch (error) {
     console.error('Failed to populate timer dropdown:', error);
@@ -396,33 +392,45 @@ async function fetchTimerHistory() {
   const timerHistoryContent = document.getElementById('timer-history-content');
   const fromDateInput = document.getElementById('history-from-date');
   const toDateInput = document.getElementById('history-to-date');
-  const timerDropdown = document.getElementById('history-timer-name-dropdown'); // Dropdown for timer name
+  const timerDropdown = document.getElementById('history-timer-name-dropdown');
 
   const fromDate = fromDateInput.value || getTodayDate();
   const toDate = toDateInput.value || getTodayDate();
-  const timerName = timerDropdown.value; // Get selected timer name
+  const timerName = timerDropdown.value;
 
   timerHistoryContent.innerHTML = '<p class="text-center text-muted">Loading timer history...</p>';
 
   try {
-    const response = await fetch('https://dcon.mobitechwireless.com/v1/http/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        action: 'logs',
-        method: 'timer_log',
-        serial_no: 'MCON874Q000568',
-        from: fromDate,
-        to: toDate,
-        ...(timerName && { timer_name: timerName }) // Include timer name filter if selected
-      })
-    });
+    // First get the latest data for valve details
+    const latestSnapshot = await db.collection('irrigation_devices')
+      .doc('MCON874Q000568')
+      .collection(getTodayDate())
+      .orderBy('timestamp', 'desc')
+      .limit(1)
+      .get();
 
-    if (!response.ok) throw new Error('Failed to fetch timer history');
+    const latestData = !latestSnapshot.empty ? latestSnapshot.docs[0].data() : {};
+    const valveDetails = latestData.summary?.valve_details || {};
 
-    const data = await response.json();
+    // Fetch timer logs and fertigation logs in parallel
+    const [timerResponse, fertigationLogs] = await Promise.all([
+      fetch('https://dcon.mobitechwireless.com/v1/http/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          action: 'logs',
+          method: 'timer_log',
+          serial_no: 'MCON874Q000568',
+          from: fromDate,
+          to: toDate,
+          ...(timerName && { timer_name: timerName })
+        })
+      }),
+      fetchFertigationLogsForDateRange(fromDate, toDate)
+    ]);
+
+    if (!timerResponse.ok) throw new Error('Failed to fetch timer history');
+    const data = await timerResponse.json();
     const logs = data.log || [];
 
     if (logs.length === 0) {
@@ -432,8 +440,6 @@ async function fetchTimerHistory() {
 
     const filteredLogs = timerName ? logs.filter((log, index) => {
       if (log.timer_name === timerName) return true;
-      
-      // Check if previous log was the selected timer and was incomplete
       if (index > 0 && 
           logs[index - 1].timer_name === timerName && 
           logs[index - 1].completed === '0' &&
@@ -458,36 +464,101 @@ async function fetchTimerHistory() {
           <th>Timer Name</th>
           <th>Run Time</th>
           <th>Valves</th>
+          <th>Active Valves</th>
           <th>Completed</th>
+          <th>Fertigation</th>
         </tr>
       </thead>
       <tbody>
-        ${filteredLogs.map(log => `
-          <tr style="cursor: pointer;">
-            <td>${log.dt}</td>
-            <td>${log.last_sync}</td>
-            <td>${log.timer_name}</td>
-            <td>${log.run_time}</td>
-            <td>${log.on_valves}</td>
-            <td>${log.completed === '1' ? 'Yes' : 'No'}</td>
-          </tr>
-        `).join('')}
+        ${filteredLogs.map(log => {
+          const fertigationInfo = wasFertigationActive(fertigationLogs, new Date(log.dt), new Date(log.last_sync));
+          let fertigationCell = '-';
+          if (fertigationInfo) {
+            fertigationCell = `
+              <div class="d-flex flex-column align-items-center">
+                <div class="progress w-100 mb-1" style="height: 5px;">
+                  <div class="progress-bar bg-success" style="width: ${fertigationInfo.percentage}%"></div>
+                </div>
+                <small>${fertigationInfo.duration}</small>
+              </div>`;
+          }
+
+          // Generate valve images using the same logic as dashboard
+          let valveImages = '';
+          if (log.on_valves) {
+            const valveArr = log.on_valves.split('-');
+            let openValveNos = [];
+            
+            // Get list of open valves
+            for (let i = 0; i < valveArr.length; i++) {
+              if (valveArr[i] !== "0") {
+                openValveNos.push(valveArr[i]);
+              }
+            }
+
+            // Generate images for each open valve
+            openValveNos.forEach(valveNo => {
+              let valveName = '';
+              if (valveNo && valveDetails[valveNo]) {
+                valveName = valveDetails[valveNo].valve_name?.toLowerCase() || '';
+              }
+              
+              let imgSrc = 'images/timer-default.png';
+              if (valveName.includes('coco')) imgSrc = 'images/coconut.png';
+              else if (valveName.includes('mango')) imgSrc = 'images/mango.png';
+              else if (valveName.includes('house')) imgSrc = 'images/house.png';
+              else if (valveName.includes('jamun')) imgSrc = 'images/jamun.png';
+              else if (valveName.includes('amla')) imgSrc = 'images/amla.png';
+              else if (valveName.includes('backwash')) imgSrc = 'images/backwash.png';
+              else if (valveName.includes('grass')) imgSrc = 'images/grass.png';
+              else if (valveName.includes('guava') || valveName.includes('gova')) imgSrc = 'images/guava.png';
+              else if (valveName.includes('onion')) imgSrc = 'images/onion.png';
+              else if (valveName.includes('pome')) imgSrc = 'images/pomegranate.png';
+              else if (valveName.includes('veg')) imgSrc = 'images/veg.png';
+              else if (valveName.includes('kulam')) imgSrc = 'images/kulam.png';
+              else if (valveName.includes('mulberry')) imgSrc = 'images/mulberry.png';
+              else if (!valveName) imgSrc = 'images/none.png';
+              
+              valveImages += `
+                <div class="d-inline-block text-center" style="margin: 2px;">
+                  <img src="${imgSrc}" alt="Valve ${valveNo}" style="width: 30px;">
+                </div>`;
+            });
+          }
+          
+          if (!valveImages) {
+            valveImages = `
+              <div class="d-inline-block text-center" style="margin: 2px;">
+                <img src="images/none.png" alt="No Valve" style="width: 30px;">
+              </div>`;
+          }
+
+          return `
+            <tr style="cursor: pointer;">
+              <td>${log.dt}</td>
+              <td>${log.last_sync}</td>
+              <td>${log.timer_name}</td>
+              <td>${log.run_time}</td>
+              <td>${log.on_valves}</td>
+              <td class="text-center">${valveImages}</td>
+              <td>${log.completed === '1' ? 'Yes' : 'No'}</td>
+              <td class="text-center" style="min-width: 100px;">${fertigationCell}</td>
+            </tr>
+          `;
+        }).join('')}
       </tbody>
     `;
+
     timerHistoryContent.innerHTML = '';
     timerHistoryContent.appendChild(table);
 
-    // Add a button to graph all pressures for the filtered timer
+    // Switch to pressure analysis tab if a timer is selected
     if (timerName) {
-      const graphButton = document.createElement('button');
-      graphButton.className = 'btn btn-primary mt-3';
-      graphButton.textContent = `Graph Pressures for "${timerName}"`;
-      graphButton.addEventListener('click', () => {
-        graphAllPressures(filteredLogs);
-        const pressureModal = new bootstrap.Modal(document.getElementById('pressureModal'));
-        pressureModal.show();
-      });
-      timerHistoryContent.appendChild(graphButton);
+      const pressureTab = document.getElementById('pressure-analysis-tab');
+      const pressureDropdown = document.getElementById('pressure-timer-dropdown');
+      pressureDropdown.value = timerName;
+      pressureTab.click();
+      graphAllPressures(filteredLogs);
     }
 
     attachTimerClickHandlers();
@@ -497,9 +568,77 @@ async function fetchTimerHistory() {
   }
 }
 
+// Helper function to fetch fertigation logs for a date range
+async function fetchFertigationLogsForDateRange(fromDate, toDate) {
+  const allLogs = [];
+  const startDate = new Date(fromDate);
+  const endDate = new Date(toDate);
+  
+  for (let d = startDate; d <= endDate; d.setDate(d.getDate() + 1)) {
+    const currentDate = d.toISOString().split('T')[0];
+    const doc = await db.collection('irrigation_devices')
+      .doc('MCON874Q000568')
+      .collection(currentDate)
+      .doc('FERTIGATION_LOGS')
+      .get();
+
+    if (doc.exists) {
+      const data = doc.data();
+      allLogs.push(...(data.logs || []));
+    }
+  }
+  
+  return allLogs;
+}
+
+// Helper function to format time duration
+function formatTimeDuration(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+}
+
+// Helper function to get overlapping time between timer and fertigation
+function getFertigationOverlap(timerStart, timerEnd, fertigationStart, fertigationEnd) {
+  const start = Math.max(timerStart.getTime(), fertigationStart.getTime());
+  const end = Math.min(timerEnd.getTime(), fertigationEnd.getTime());
+  if (start < end) {
+    const overlapMinutes = Math.round((end - start) / (1000 * 60));
+    const totalTimerMinutes = Math.round((timerEnd - timerStart) / (1000 * 60));
+    return {
+      duration: formatTimeDuration(overlapMinutes),
+      percentage: Math.round((overlapMinutes / totalTimerMinutes) * 100)
+    };
+  }
+  return null;
+}
+
+function wasFertigationActive(fertigationLogs, timerStart, timerEnd) {
+  const overlaps = fertigationLogs
+    .map(log => {
+      const fertigationStart = log.startTime.toDate();
+      const fertigationEnd = log.endTime ? log.endTime.toDate() : new Date();
+      return getFertigationOverlap(timerStart, timerEnd, fertigationStart, fertigationEnd);
+    })
+    .filter(overlap => overlap !== null);
+
+  if (overlaps.length === 0) return null;
+
+  // Return the total duration and maximum overlap percentage
+  const totalDuration = overlaps.reduce((sum, curr) => {
+    const minutes = parseInt(curr.duration);
+    return sum + minutes;
+  }, 0);
+  
+  return {
+    duration: formatTimeDuration(totalDuration),
+    percentage: Math.max(...overlaps.map(o => o.percentage))
+  };
+}
+
+// --- Existing code continues unchanged ---
+
 async function graphAllPressures(logs) {
-  alert(logs.length);
-  alert(JSON.stringify(logs));
   const chartContainer = document.getElementById('pressure-chart-container');
   chartContainer.innerHTML = '<p class="text-muted">Loading pressure data...</p>';
 
@@ -507,9 +646,8 @@ async function graphAllPressures(logs) {
     // Fetch pressure data for each timer segment
     const pressureDataPromises = logs.map(async log => {
 
-      const striii = `https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(log.dt)}&to=${encodeURIComponent(log.last_sync)}&product=DCON`;
-      alert(striii);
-      const response = await fetch(striii);
+      const linktext = `https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(log.dt)}&to=${encodeURIComponent(log.last_sync)}&product=DCON`;
+      const response = await fetch(linktext);
       if (!response.ok) throw new Error('Failed to fetch pressure data');
       const data = await response.json();
       return {
@@ -524,38 +662,63 @@ async function graphAllPressures(logs) {
     const datasets = [];
     let allPressureValues = [];
     
+    // Define backwash color
+    const backwashColor = 'rgba(255, 230, 0, 0.29)';
+    let shownBackwash = false;
+
     allPressureData.forEach((segment, index) => {
       if (segment.data.length > 0) {
-        const segmentColor = `hsl(${index * (360 / allPressureData.length)}, 70%, 50%)`;
+        const isBackwash = logs[index].timer_name.toLowerCase().includes('backwash');
+        const hue = index * (360 / allPressureData.length);
+        const segmentColor = isBackwash ? backwashColor : `hsla(${hue}, 70%, 50%, 0.2)`;
+        const inputColor = '#007bff';
+        const outputColor = '#28a745';
         
         // Extract pressure values
         const inputValues = segment.data.map(entry => parseFloat(entry.pressure.split('-')[0]));
         const outputValues = segment.data.map(entry => parseFloat(entry.pressure.split('-')[1]));
         allPressureValues = [...allPressureValues, ...inputValues, ...outputValues];
 
+        // Add background area for this segment's time range
+        const timeStart = new Date(segment.data[0].dt).getTime();
+        const timeEnd = new Date(segment.data[segment.data.length - 1].dt).getTime();
+        
+        const timerName = logs[index].timer_name;
+        let labelName = timerName;
+        
+        // Skip duplicate backwash entries in legend
+        if (isBackwash && shownBackwash) {
+          labelName = '';  // Empty label to hide from legend
+        }
+        if (isBackwash) {
+          shownBackwash = true;
+        }
+
         datasets.push(
           {
-            label: `Input Pressure (${segment.timestamp})`,
+            label: isBackwash && !shownBackwash ? 'Backwash (Input)' : labelName ? `${labelName} (Input)` : '',
             data: segment.data.map(entry => ({
               x: entry.dt,
               y: parseFloat(entry.pressure.split('-')[0])
             })),
-            borderColor: segmentColor,
+            borderColor: inputColor,
             backgroundColor: segmentColor,
-            fill: false,
-            segment: segment.timestamp
+            fill: true,
+            segment: segment.timestamp,
+            pointRadius: 2
           },
           {
-            label: `Output Pressure (${segment.timestamp})`,
+            label: isBackwash && !shownBackwash ? 'Backwash (Output)' : labelName ? `${labelName} (Output)` : '',
             data: segment.data.map(entry => ({
               x: entry.dt,
               y: parseFloat(entry.pressure.split('-')[1])
             })),
-            borderColor: segmentColor,
-            backgroundColor: segmentColor,
+            borderColor: outputColor,
+            backgroundColor: 'transparent',
             fill: false,
             segment: segment.timestamp,
-            borderDash: [5, 5]
+            borderDash: [5, 5],
+            pointRadius: 2
           }
         );
       }
@@ -566,7 +729,14 @@ async function graphAllPressures(logs) {
     const maxPressure = Math.ceil(Math.max(...allPressureValues) + 0.5);
 
     // Create chart
-    chartContainer.innerHTML = '<canvas id="pressure-chart" style="max-width: 100%; height: 500px;"></canvas>';
+    chartContainer.innerHTML = `
+      <div class="text-center mb-3">
+        <small class="text-muted">Note: Solid lines represent input pressure, dashed lines represent output pressure</small>
+      </div>
+      <div style="height: 500px;">
+        <canvas id="pressure-chart"></canvas>
+      </div>
+    `;
     const ctx = document.getElementById('pressure-chart').getContext('2d');
     new Chart(ctx, {
       type: 'line',
@@ -637,7 +807,11 @@ async function fetchPressureData(from, to) {
     const outputPressure = pressureData.map(entry => parseFloat(entry.pressure.split('-')[1]));
 
     // Create chart
-    chartContainer.innerHTML = '<canvas id="pressure-chart" style="max-width: 100%; height: 500px;"></canvas>'; // Increased height
+    chartContainer.innerHTML = `
+      <div style="height: 500px;">
+        <canvas id="pressure-chart"></canvas>
+      </div>
+    `;
     const ctx = document.getElementById('pressure-chart').getContext('2d');
     new Chart(ctx, {
       type: 'line',
@@ -681,10 +855,13 @@ function attachTimerClickHandlers() {
   timerRows.forEach(row => {
     row.addEventListener('click', () => {
       const from = row.cells[0].textContent.trim();
-      const to = row.cells[1].textContent.trim(); // Use next row's timestamp or same row
+      const to = row.cells[1].textContent.trim();
+      const timerName = row.cells[2].textContent.trim();
+      const pressureTab = document.getElementById('pressure-analysis-tab');
+      const pressureDropdown = document.getElementById('pressure-timer-dropdown');
+      pressureDropdown.value = timerName;
+      pressureTab.click();
       fetchPressureData(from, to);
-      const pressureModal = new bootstrap.Modal(document.getElementById('pressureModal'));
-      pressureModal.show();
     });
   });
 }
@@ -705,5 +882,216 @@ setInterval(fetchAllDashboardData, 5 * 60 * 1000);
 // Populate the timer dropdown on page load
 document.addEventListener('DOMContentLoaded', () => {
   populateTimerDropdown();
-  document.getElementById('fetch-history-btn').addEventListener('click', fetchTimerHistory); // Attach fetch button event
+  document.getElementById('fetch-history-btn').addEventListener('click', fetchTimerHistory);
+  document.getElementById('analyze-pressure-btn').addEventListener('click', () => {
+    const timerName = document.getElementById('pressure-timer-dropdown').value;
+    if (timerName) {
+      // Fetch the logs for this timer and graph pressures
+      fetch('https://dcon.mobitechwireless.com/v1/http/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          action: 'logs',
+          method: 'timer_log',
+          serial_no: 'MCON874Q000568',
+          from: getTodayDate(),
+          to: getTodayDate(),
+          timer_name: timerName
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.log && data.log.length > 0) {
+          graphAllPressures(data.log);
+        }
+      })
+      .catch(error => console.error('Failed to fetch timer data:', error));
+    }
+  });
+});
+
+// Fertigation Management
+let fertigationUpdateInterval = null;
+
+function updateFertigationStatus(isActive = false, startTime = null, notes = '') {
+  const statusDot = document.getElementById('fertigation-status-dot');
+  const statusText = document.getElementById('fertigation-status-text');
+  const timerDisplay = document.getElementById('fertigation-timer');
+  const notesDisplay = document.getElementById('fertigation-notes-display');
+  const statusCard = document.getElementById('fertigation-status-card');
+
+  if (isActive && startTime) {
+    statusDot.style.backgroundColor = '#28a745';
+    statusText.textContent = 'Active';
+    notesDisplay.textContent = notes || 'No notes';
+    statusCard.style.border = '2px solid #28a745';
+    // Update timer
+    const updateTimer = () => {
+      const now = new Date();
+      const duration = Math.round((now - startTime) / 1000 / 60); // minutes
+      timerDisplay.textContent = `Running for ${duration} minutes`;
+    };
+    updateTimer();
+    if (fertigationUpdateInterval) clearInterval(fertigationUpdateInterval);
+    fertigationUpdateInterval = setInterval(updateTimer, 60000); // Update every minute
+  } else {
+    statusDot.style.backgroundColor = '#6c757d';
+    statusText.textContent = 'Inactive';
+    timerDisplay.textContent = '';
+    notesDisplay.textContent = '';
+    statusCard.style.border = '1px solid rgba(0,0,0,.125)';
+    if (fertigationUpdateInterval) {
+      clearInterval(fertigationUpdateInterval);
+      fertigationUpdateInterval = null;
+    }
+  }
+}
+
+// Helper to get today's fertigation log doc ref
+function getTodayDocRef() {
+  const currentDate = new Date().toISOString().split('T')[0];
+  return db.collection('irrigation_devices')
+    .doc('MCON874Q000568')
+    .collection(currentDate)
+    .doc('FERTIGATION_LOGS');
+}
+
+
+// Real-time listener for fertigation status
+function listenFertigationStatus() {
+  const dateRef = getTodayDocRef();
+  dateRef.onSnapshot((doc) => {
+    let isActive = false;
+    let startTime = null;
+    let notes = '';
+    let logs = [];
+    if (doc.exists) {
+      logs = doc.data().logs || [];
+      // If any log does not have an endTime, fertigation is considered active
+      const activeLog = logs.find(log => !log.endTime);
+      if (activeLog) {
+        isActive = true;
+        startTime = activeLog.startTime.toDate();
+        notes = activeLog.notes || '';
+      }
+    }
+    updateFertigationStatus(isActive, startTime, notes);
+    // Button enable/disable logic (all users see same state based on Firestore logs)
+    if (isActive) {
+      // There is an active log: disable start, enable stop, disable notes
+      document.getElementById('start-fertigation').disabled = true;
+      document.getElementById('stop-fertigation').disabled = false;
+      document.getElementById('fertigation-notes').disabled = true;
+    } else {
+      // No active log: enable start, disable stop, enable notes
+      document.getElementById('start-fertigation').disabled = false;
+      document.getElementById('stop-fertigation').disabled = true;
+      document.getElementById('fertigation-notes').disabled = false;
+      // If stopping, reset form
+      document.getElementById('fertigation-form').reset();
+    }
+  });
+}
+
+async function loadFertigationHistory() {
+  const historyTableBody = document.getElementById('fertigation-history');
+  historyTableBody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+
+  try {
+    const today = new Date();
+    const dates = [];
+    
+    // Get last 7 days
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+
+    // Fetch fertigation logs for each date
+    const allLogs = [];
+    for (const date of dates) {
+      const doc = await db.collection('irrigation_devices')
+        .doc('MCON874Q000568')
+        .collection(date)
+        .doc('FERTIGATION_LOGS')
+        .get();
+
+      if (doc.exists) {
+        const data = doc.data();
+        allLogs.push(...(data.logs || []));
+      }
+    }
+
+    if (allLogs.length === 0) {
+      historyTableBody.innerHTML = '<tr><td colspan="3" class="text-center">No fertigation history found</td></tr>';
+      return;
+    }
+
+    // Sort logs by startTime in descending order
+    allLogs.sort((a, b) => b.startTime.toDate() - a.startTime.toDate());
+
+    historyTableBody.innerHTML = '';
+    allLogs.slice(0, 10).forEach(log => {
+      const row = document.createElement('tr');
+      const startTime = log.startTime.toDate();
+      let duration = 'In Progress';
+      
+      if (log.endTime) {
+        duration = `${log.duration} min`;
+      }
+      
+      row.innerHTML = `
+        <td>${startTime.toLocaleString()}</td>
+        <td>${duration}</td>
+        <td>${log.notes || '-'}</td>
+      `;
+      historyTableBody.appendChild(row);
+    });
+  } catch (error) {
+    console.error('Error loading tank history:', error);
+    historyTableBody.innerHTML = `
+      <tr>
+        <td colspan="3" class="text-center text-danger">
+          Error loading history. Please ensure you have the required database permissions.
+        </td>
+      </tr>`;
+  }
+}
+
+// Add event listeners when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Initialize fertigation features
+  loadFertigationHistory();
+  // Attach new Cloud Run endpoints for fertigation management
+  document.getElementById('start-fertigation').addEventListener('click', () => {
+    const notes = document.getElementById('fertigation-notes').value || '';
+    fetch('https://startfertigation-m2hab33w6q-uc.a.run.app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes })
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log(data);
+      loadFertigationHistory();
+    })
+    .catch(err => console.error(err));
+  });
+
+  document.getElementById('stop-fertigation').addEventListener('click', () => {
+    fetch('https://stopfertigation-m2hab33w6q-uc.a.run.app', {
+      method: 'POST'
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log(data);
+      loadFertigationHistory();
+    })
+    .catch(err => console.error(err));
+  });
+  // Refresh fertigation history when tab is shown
+  document.getElementById('fertigation-logs-tab').addEventListener('shown.bs.tab', loadFertigationHistory);
+  // Listen for fertigation status changes in real-time
+  listenFertigationStatus();
 });
