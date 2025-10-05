@@ -4,6 +4,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { onRequest } = require("firebase-functions/v2/https");
 const axios = require("axios");
+const config = require("./config");
 
 initializeApp();
 if (process.env.FUNCTIONS_EMULATOR === 'true') {
@@ -18,7 +19,7 @@ const db = getFirestore();
 const form_data = new URLSearchParams({
   action: "dashboard",
   p: "app",
-  token_id: "dyWWPoMA100JjehCnvnVHC:APA91bGRCO2MF-aNvdAG8SUYW0LUmaISV5cBYQDoVWUS6QN4UyiVZQ3IljhMeTf-Ss4drnqMo5H57oWXE08U4XxgSB42huq_mHxLXQiensiu6Aq-pNqAQtY@ios",
+  token_id: config.DEVICE_TOKEN,
   product: "DCON",
 });
 
@@ -29,7 +30,7 @@ const headers = {
 
 exports.fetchAndStoreIrrigationData = onSchedule("every 5 minutes", async (event) => {
   try {
-    const response = await axios.post("https://dcon.mobitechwireless.com/v1/http/", form_data, { headers });
+    const response = await axios.post(config.DCON_API_URL, form_data, { headers });
     const jsonData = response.data;
 
     const deviceKey = Object.keys(jsonData)[0]; // Get device key (e.g., MCON874Q000568)
@@ -156,7 +157,7 @@ exports.fetchAndStoreIrrigationData = onSchedule("every 5 minutes", async (event
 function getTodayDocRef(db) {
   const currentDate = new Date().toISOString().split("T")[0];
   return db.collection("irrigation_devices")
-           .doc("MCON874Q000568")
+           .doc(config.DEVICE_ID)
            .collection(currentDate)
            .doc("FERTIGATION_LOGS");
 }
@@ -171,7 +172,7 @@ exports.startFertigation = onRequest((req, res) => {
         quantity: "1 Tank",
         notes,
         startTime,
-        deviceId: "MCON874Q000568"
+        deviceId: config.DEVICE_ID
       };
 
       const dateRef = getTodayDocRef(db);
@@ -197,7 +198,7 @@ exports.startFertigation = onRequest((req, res) => {
       res.json({ success: true, message: "Fertigation started", startTime });
       try {
         await axios.post(
-          "https://cliq.zoho.in/api/v2/channelsbyname/workerlogsh/message?zapikey=1001.206f6f66d7b8b1245e0513e3cd6cfafd.b4844f18747e01a15d27ed0639dedf2f",
+          `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
           { text: `🌿 Fertigation started at ${startTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}` }
         );
       } catch (notifyErr) {
@@ -237,7 +238,7 @@ exports.stopFertigation = onRequest((req, res) => {
         const lastLog = logs.find(l => l.endTime);
         const duration = lastLog?.duration || "unknown";
         await axios.post(
-          "https://cliq.zoho.in/api/v2/channelsbyname/workerlogsh/message?zapikey=1001.206f6f66d7b8b1245e0513e3cd6cfafd.b4844f18747e01a15d27ed0639dedf2f",
+          `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
           { text: `🛑 Fertigation stopped at ${endTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} (duration: ${duration} mins)` }
         );
       } catch (notifyErr) {

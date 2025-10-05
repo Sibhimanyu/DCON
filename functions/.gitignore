@@ -1,2 +1,4 @@
 node_modules/
 *.local
+config.js
+../public/firebase-config.js
