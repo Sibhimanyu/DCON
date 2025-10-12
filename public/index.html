@@ -30,6 +30,9 @@
       <button class="nav-link" id="timer-history-tab" data-bs-toggle="tab" data-bs-target="#timer-history" type="button" role="tab">Timer History</button>
     </li>
     <li class="nav-item" role="presentation">
+      <button class="nav-link" id="valve-groups-tab" data-bs-toggle="tab" data-bs-target="#valve-groups" type="button" role="tab">Valve Groups</button>
+    </li>
+    <li class="nav-item" role="presentation">
       <button class="nav-link" id="pressure-analysis-tab" data-bs-toggle="tab" data-bs-target="#pressure-analysis" type="button" role="tab">Pressure Analysis</button>
     </li>
   </ul>
@@ -38,108 +41,123 @@
   <div class="tab-content pt-3" id="dashboardTabsContent">
     <div class="tab-pane fade show active animate__animated animate__fadeInUp" id="dashboard" role="tabpanel">
       <!-- General Dashboard: display summary visuals, integrate electricity, pressure, and timer overview neatly here -->
-      <div id="dashboard-overview" class="row gy-3 mt-3">
-        <div class="col-md-6 col-lg-4 mb-4">
-          <div class="card h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title text-muted">Sump Status</h5>
-              <div id="electricity-status" class="mb-0">
-                <img id="motor-image" src="images/motor-off.png" alt="Motor">
-                <div id="motor-status-text" class="mt-2 fw-bold text-secondary">Loading...</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-6 col-lg-4 mb-4">
-          <div class="card h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title text-muted">Pressure (In/Out)</h5>
-              <div class="d-flex justify-content-around align-items-center">
-                <!-- Input Pressure Gauge -->
-                <div class="text-center">
-                  <canvas id="input-pressure-gauge" width="120" height="120"></canvas>
-                  <p class="mt-2 fw-bold">Input</p>
-                </div>
-                <!-- Output Pressure Gauge -->
-                <div class="text-center">
-                  <canvas id="output-pressure-gauge" width="120" height="120"></canvas>
-                  <p class="mt-2 fw-bold">Output</p>
-                </div>
-              </div>
-              <!-- Add linear gauge for pressure difference -->
-              <div class="mt-3">
-                <div class="text-center mb-2">
-                  <span id="pressure-difference-value" style="font-size: 1.5rem; font-weight: bold;">0.00 difference (bar)</span>
-                </div>
-                <div class="progress" style="height: 20px;">
-                  <div id="pressure-difference-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+      <div id="dashboard-overview" class="mt-3">
+        <div class="row gy-3">
+          <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+              <div class="card-body text-center">
+                <h5 class="card-title text-muted">Sump Status</h5>
+                <div id="electricity-status" class="mb-0">
+                  <img id="motor-image" src="images/motor-off.png" alt="Motor">
+                  <div id="motor-status-text" class="mt-2 fw-bold text-secondary">Loading...</div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        <div class="col-md-6 col-lg-4 mb-4">
-          <div class="card h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title text-muted">Current Timer</h5>
-              <div class="d-flex flex-column align-items-center">
-                <div id="timer-images"></div>
-                <p id="dashboard-current-timer" class="text-primary mt-2">Loading...</p>
-                <!-- Add: Valves list display -->
-                <div id="dashboard-current-valves" class="mt-2"></div>
+          <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+              <div class="card-body text-center">
+                <h5 class="card-title text-muted">Pressure (In/Out)</h5>
+                <div class="d-flex justify-content-around align-items-center">
+                  <!-- Input Pressure Gauge -->
+                  <div class="text-center">
+                    <canvas id="input-pressure-gauge" width="120" height="120"></canvas>
+                    <p class="mt-2 fw-bold">Input</p>
+                  </div>
+                  <!-- Output Pressure Gauge -->
+                  <div class="text-center">
+                    <canvas id="output-pressure-gauge" width="120" height="120"></canvas>
+                    <p class="mt-2 fw-bold">Output</p>
+                  </div>
+                </div>
+                <!-- Add linear gauge for pressure difference -->
+                <div class="mt-3">
+                  <div class="text-center mb-2">
+                    <span id="pressure-difference-value" style="font-size: 1.5rem; font-weight: bold;">0.00 difference (bar)</span>
+                  </div>
+                  <div class="progress" style="height: 20px;">
+                    <div id="pressure-difference-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <!-- Voltage & Current Chart Card -->
-        <div class="col-md-6 col-lg-6 mb-4">
-          <div class="card h-100">
-            <div class="card-body">
-              <h5 class="card-title text-muted text-center">Voltage & Current (3 Phase)</h5>
-              <div class="d-flex justify-content-around align-items-center" style="padding-top: 40px !important;">
-                <div class="text-center" style="background-color: #ff4d4f; color: white; padding: 20px; border-radius: 10px; width: 150px;">
-                  <h6>R</h6>
-                  <p id="voltage-phase-1-box" class="mb-0">0 V</p>
-                  <p id="current-phase-1-box" class="mb-0">0 A</p>
-                </div>
-                <div class="text-center" style="background-color: #f7c600; color: white; padding: 20px; border-radius: 10px; width: 150px;">
-                  <h6>Y</h6>
-                  <p id="voltage-phase-2-box" class="mb-0">0 V</p>
-                  <p id="current-phase-2-box" class="mb-0">0 A</p>
-                </div>
-                <div class="text-center" style="background-color: #007bff; color: white; padding: 20px; border-radius: 10px; width: 150px;">
-                  <h6>B</h6>
-                  <p id="voltage-phase-3-box" class="mb-0">0 V</p>
-                  <p id="current-phase-3-box" class="mb-0">0 A</p>
+          <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+              <div class="card-body text-center">
+                <h5 class="card-title text-muted">Current Timer</h5>
+                <div class="d-flex flex-column align-items-center">
+                  <div id="timer-images"></div>
+                  <p id="dashboard-current-timer" class="text-primary mt-2">Loading...</p>
+                  <!-- Add: Valves list display -->
+                  <div id="dashboard-current-valves" class="mt-2"></div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <!-- Add Next Timer Card -->
-        <div class="col-md-6 col-lg-4 mb-4">
-          <div class="card h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title text-muted">Next Timer</h5>
-              <div class="d-flex flex-column align-items-center">
-                <img id="next-timer-image" src="images/none.png" alt="Next Timer" style="width: 150px;" />
-                <p id="dashboard-next-timer" class="text-secondary mt-2">Loading...</p>
+        <div class="row gy-3 mt-3">
+          <!-- Voltage & Current Chart Card -->
+          <div class="col-md-12 col-lg-6 mb-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title text-muted text-center">Voltage & Current (3 Phase)</h5>
+                <div class="d-flex justify-content-around align-items-center" style="padding-top: 40px !important;">
+                  <div class="text-center" style="background-color: #ff4d4f; color: white; padding: 20px; border-radius: 10px; width: 150px;">
+                    <h6>R</h6>
+                    <p id="voltage-phase-1-box" class="mb-0">0 V</p>
+                    <p id="current-phase-1-box" class="mb-0">0 A</p>
+                  </div>
+                  <div class="text-center" style="background-color: #f7c600; color: white; padding: 20px; border-radius: 10px; width: 150px;">
+                    <h6>Y</h6>
+                    <p id="voltage-phase-2-box" class="mb-0">0 V</p>
+                    <p id="current-phase-2-box" class="mb-0">0 A</p>
+                  </div>
+                  <div class="text-center" style="background-color: #007bff; color: white; padding: 20px; border-radius: 10px; width: 150px;">
+                    <h6>B</h6>
+                    <p id="voltage-phase-3-box" class="mb-0">0 V</p>
+                    <p id="current-phase-3-box" class="mb-0">0 A</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Add Next Timer Card -->
+          <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card h-100">
+              <div class="card-body text-center">
+                <h5 class="card-title text-muted">Next Timer</h5>
+                <div class="d-flex flex-column align-items-center">
+                  <img id="next-timer-image" src="images/none.png" alt="Next Timer" style="width: 150px;" />
+                  <p id="dashboard-next-timer" class="text-secondary mt-2">Loading...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Add Fertigation Status Card -->
+          <div class="col-md-6 col-lg-3 mb-4">
+            <div class="card h-100" id="fertigation-status-card">
+              <div class="card-body text-center" style="padding: 10px 0;">
+                <h5 class="card-title text-muted">Fertigation Status</h5>
+                <div class="d-flex flex-column align-items-center">
+                  <div class="fertigation-indicator mb-2">
+                    <div id="fertigation-status-dot" class="status-dot"></div>
+                    <span id="fertigation-status-text">Inactive</span>
+                  </div>
+                  <div id="fertigation-timer" class="text-muted"></div>
+                  <div id="fertigation-notes-display" class="small text-muted mt-2"></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-        <!-- Add Fertigation Status Card -->
-        <div class="col-md-6 col-lg-4 mb-4">
-          <div class="card h-100" id="fertigation-status-card">
-            <div class="card-body text-center">
-              <h5 class="card-title text-muted">Fertigation Status</h5>
-              <div class="d-flex flex-column align-items-center">
-                <div class="fertigation-indicator mb-2">
-                  <div id="fertigation-status-dot" class="status-dot"></div>
-                  <span id="fertigation-status-text">Inactive</span>
-                </div>
-                <div id="fertigation-timer" class="text-muted"></div>
-                <div id="fertigation-notes-display" class="small text-muted mt-2"></div>
+        <div class="row gy-3 mt-3">
+          <div class="col-12">
+            <div class="card h-100">
+              <div class="card-body text-center">
+                <h5 class="card-title text-muted">AI Anomaly Detection</h5>
+                <div id="ai-insights" class="text-start"></div>
+                <button onclick="runAiAnomalyTest()" class="btn btn-outline-primary mt-3">Run AI Test</button>
               </div>
             </div>
           </div>
@@ -163,6 +181,13 @@
       </div>
     </div>
     
+    <div class="tab-pane fade" id="valve-groups" role="tabpanel">
+      <div class="d-flex justify-content-center align-items-center mb-3">
+        <p class="text-muted">Select a valve group to view pressure history.</p>
+      </div>
+      <div id="valve-group-cards" class="row g-3 mt-3"></div>
+    </div>
+
     <div class="tab-pane fade" id="pressure-analysis" role="tabpanel">
       <div class="d-flex justify-content-center align-items-center mb-3">
         <label for="pressure-timer-dropdown" class="me-2">Timer Name:</label>
@@ -176,23 +201,19 @@
       </div>
     </div>
     <div class="tab-pane fade" id="fertigation-logs" role="tabpanel">
-      <div class="row">
-        <div class="col-md-6">
-          <div class="card mb-4">
-            <div class="card-body">
-              <h5 class="card-title">New Fertigation Log</h5>
-              <form id="fertigation-form">
-                <button type="button" id="start-fertigation" class="btn btn-primary btn-lg">Start Tank</button>
-                <button type="button" id="stop-fertigation" class="btn btn-danger btn-lg" disabled>Stop Tank</button>
-                <div class="mb-3">
-                  <label class="form-label">Notes (optional)</label>
-                  <textarea class="form-control" id="fertigation-notes" rows="3"></textarea>
-                </div>
-              </form>
-            </div>
+      <div class="card mt-4">
+        <div class="card-body">
+          <h5 class="card-title text-muted">Valve Queue</h5>
+          <div id="valve-group-queue-controls" class="mb-3">
+            <button id="add-valve-group-btn" class="btn btn-primary">Select Valves and Add to Queue</button>
+            <p class="text-muted mt-2">Choose multiple valves using the modal interface.</p>
           </div>
+          <h6 class="mt-3">Queue:</h6>
+          <ul id="valve-group-queue-list" class="list-group mb-3"></ul>
         </div>
-        <div class="col-md-6">
+      </div>
+      <div class="row">
+        <div class="col-12">
           <div class="card">
             <div class="card-body">
               <h5 class="card-title">Tank History</h5>
@@ -202,6 +223,7 @@
                     <tr>
                       <th>Date</th>
                       <th>Duration</th>
+                      <th>Active Timers</th>
                       <th>Notes</th>
                     </tr>
                   </thead>
@@ -217,8 +239,8 @@
   </div>
 </div>
 
-<script src="firebase-config.js"></script>
-<script src="main.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="main.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
