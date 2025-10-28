@@ -523,16 +523,30 @@ async function fetchTimerHistory() {
                     const fertigationLogs = snapshot.docs
                         .map((doc) => doc.data())
                         .filter((log) => {
-                            const start = log.startTime?.toDate
-                                ? log.startTime.toDate()
-                                : new Date(log.startTime);
-                            const end = log.endTime?.toDate
-                                ? log.endTime.toDate()
-                                : new Date();
-                            return (
-                                start <= new Date(toDate) &&
-                                end >= new Date(fromDate)
-                            );
+                            let start, end;
+                            // Safely handle Firestore Timestamp or raw date strings
+                            try {
+                                start = log.startTime?.toDate
+                                    ? log.startTime.toDate()
+                                    : new Date(log.startTime);
+                            } catch {
+                                start = new Date(0); // fallback very old date
+                            }
+
+                            try {
+                                end = log.endTime?.toDate
+                                    ? log.endTime.toDate()
+                                    : log.endTime
+                                    ? new Date(log.endTime)
+                                    : new Date(); // if still active
+                            } catch {
+                                end = new Date(); // fallback to now
+                            }
+
+                            // Use full-day date range for matching
+                            const rangeStart = new Date(`${fromDate}T00:00:00`);
+                            const rangeEnd = new Date(`${toDate}T23:59:59`);
+                            return start <= rangeEnd && end >= rangeStart;
                         });
                     return fertigationLogs;
                 }),
@@ -541,7 +555,6 @@ async function fetchTimerHistory() {
         if (!timerResponse.ok) throw new Error("Failed to fetch timer history");
         const data = await timerResponse.json();
         const logs = data.log || [];
-        alert(JSON.stringify(logs));
 
         if (logs.length === 0) {
             timerHistoryContent.innerHTML =
@@ -751,12 +764,24 @@ async function fetchTimerHistory() {
                         bValue = parseInt(b.cells[3].textContent) || 0;
                         break;
                     case "completed":
-                        aValue = a.cells[6].textContent === "Yes" ? 1 : 0;
-                        bValue = b.cells[6].textContent === "Yes" ? 1 : 0;
+                        // "Completed" is in column index 7
+                        aValue = a.cells[7].textContent.trim() === "Yes" ? 1 : 0;
+                        bValue = b.cells[7].textContent.trim() === "Yes" ? 1 : 0;
                         break;
                     case "fertigation":
-                        aValue = a.cells[7].textContent === "-" ? 0 : 1;
-                        bValue = b.cells[7].textContent === "-" ? 0 : 1;
+                        // "Fertigation" is in column index 8 and contains HTML progress bar
+                        const aBar = a.cells[8].querySelector(".progress-bar");
+                        const bBar = b.cells[8].querySelector(".progress-bar");
+
+                        const aPercent = aBar
+                            ? parseFloat(aBar.style.width) || 0
+                            : (a.cells[8].textContent.trim() === "-" ? 0 : 1);
+                        const bPercent = bBar
+                            ? parseFloat(bBar.style.width) || 0
+                            : (b.cells[8].textContent.trim() === "-" ? 0 : 1);
+
+                        aValue = aPercent;
+                        bValue = bPercent;
                         break;
                     default:
                         aValue =
