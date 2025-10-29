@@ -1342,21 +1342,23 @@ async function runAiAnomalyTest() {
     }
 }
 
-// Update the fetchAllDashboardData function
+// Update the fetchAllDashboardData function to trigger the Cloud Function before fetching dashboard data
 async function fetchAllDashboardData() {
+    // Replace <REGION> and <PROJECT_ID> with your actual values
+    const cloudFunctionUrl = "https://fetchirrigationdataondemand-m2hab33w6q-uc.a.run.app";
+    try {
+        await fetch(cloudFunctionUrl);
+        console.log("Triggered on-demand data fetch.");
+    } catch (err) {
+        console.error("Failed to trigger on-demand data fetch:", err);
+    }
+    // Continue with Firestore-based fetches regardless of function call result
     await Promise.all([
         fetchLiveData(),
         populateDashboardOverview(),
         fetchTimerHistory(),
         updateAiInsights(),
     ]);
-}
-
-// Dashboard Overview and Timer History fetch
-function fetchAllDashboardData() {
-    fetchLiveData();
-    populateDashboardOverview();
-    fetchTimerHistory();
 }
 
 // Initial fetch
@@ -1506,6 +1508,7 @@ async function loadFertigationHistory() {
         '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
 
     try {
+        // Fetch last 10 fertigation logs from Firestore
         const logsRef = db
             .collection("irrigation_devices")
             .doc("MCON874Q000568")
@@ -1527,52 +1530,58 @@ async function loadFertigationHistory() {
             return;
         }
 
-        // Process logs and add timer information
-        const processedLogs = await Promise.all(
-            snapshot.docs.map(async (doc) => {
-                const log = doc.data();
-                const startTime = log.startTime.toDate();
-                const endTime = log.endTime?.toDate();
+        // For all fertigation logs, fetch timer logs from Mobitech API in one go (for the combined time range)
+        const fertigationLogs = snapshot.docs.map((doc) => doc.data());
+        // Find overall min start and max end
+        let minStart = null;
+        let maxEnd = null;
+        fertigationLogs.forEach((log) => {
+            const s = log.startTime.toDate();
+            const e = log.endTime?.toDate() || new Date();
+            if (!minStart || s < minStart) minStart = s;
+            if (!maxEnd || e > maxEnd) maxEnd = e;
+        });
+        // Fetch all timer logs from Mobitech API for this range
+        const timerResponse = await fetch(
+            "https://dcon.mobitechwireless.com/v1/http/",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    action: "logs",
+                    method: "timer_log",
+                    serial_no: "MCON874Q000568",
+                    from: minStart.toISOString(),
+                    to: maxEnd.toISOString(),
+                }),
+            }
+        ).then((res) => res.json());
+        const timerLogs = timerResponse.log || [];
 
-                // Fetch overlapping timers
-                const timerResponse = await fetch(
-                    "https://dcon.mobitechwireless.com/v1/http/",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/x-www-form-urlencoded",
-                        },
-                        body: new URLSearchParams({
-                            action: "logs",
-                            method: "timer_log",
-                            serial_no: "MCON874Q000568",
-                            from: startTime.toISOString(),
-                            to: endTime
-                                ? endTime.toISOString()
-                                : new Date().toISOString(),
-                        }),
-                    }
-                ).then((res) => res.json());
-
-                const overlappingTimers = (timerResponse.log || []).filter(
-                    (timer) => {
-                        const timerStart = new Date(timer.dt);
-                        const timerEnd = new Date(timer.last_sync);
-                        return (
-                            startTime <= timerEnd &&
-                            (endTime ? endTime >= timerStart : true) &&
-                            timer.on_valves &&
-                            timer.on_valves !== "0"
-                        );
-                    }
+        // For each fertigation log, find overlapping timers from timerLogs (by overlap of start/end)
+        const processedLogs = fertigationLogs.map((log) => {
+            const startTime = log.startTime.toDate();
+            const endTime = log.endTime?.toDate();
+            // Filter timer logs that overlap
+            const overlappingTimers = timerLogs.filter((timer) => {
+                const timerStart = new Date(timer.dt);
+                const timerEnd = new Date(timer.last_sync);
+                // Overlap logic: timer starts before fertigation ends, and timer ends after fertigation starts
+                const fertEnd = endTime || new Date();
+                return (
+                    startTime <= timerEnd &&
+                    fertEnd >= timerStart &&
+                    timer.on_valves &&
+                    timer.on_valves !== "0"
                 );
-
-                return {
-                    ...log,
-                    overlappingTimers,
-                };
-            })
-        );
+            });
+            return {
+                ...log,
+                overlappingTimers,
+            };
+        });
 
         // Render the history table
         historyTableBody.innerHTML = "";
@@ -1580,18 +1589,16 @@ async function loadFertigationHistory() {
             const row = document.createElement("tr");
             const startTime = log.startTime.toDate();
             let duration = "In Progress";
-
             if (log.endTime) {
                 duration = `${log.duration} min`;
             }
-
+            // Use timer_name and valves directly from API response
             const timerInfo = log.overlappingTimers
                 .map(
                     (timer) =>
                         `${timer.timer_name} (Valves: ${timer.on_valves})`
                 )
                 .join("<br>");
-
             row.innerHTML = `
         <td>${startTime.toLocaleString()}</td>
         <td>${duration}</td>
