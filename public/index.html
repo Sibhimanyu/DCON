@@ -11,11 +11,39 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+  <style>
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { background-color: #f8f9fa; }
+    .sort-icon { font-size: 0.8em; margin-left: 5px; }
+  </style>
 </head>
 <body>
 <div class="container py-4">
-  <h2 class="mb-4 text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
+  <!-- Header with title and profile button -->
+  <div class="position-relative mb-4">
+    <h2 class="text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
+
+    <!-- User Profile Button (top-right overlay) -->
+    <button
+      id="user-menu-btn"
+      class="btn btn-outline-primary d-flex align-items-center position-absolute top-0 end-0 me-3"
+      data-bs-toggle="modal"
+      data-bs-target="#userModal"
+    >
+      <img
+        id="user-avatar"
+        src="images/user-default.png"
+        alt="User"
+        style="width:32px;height:32px;border-radius:50%;margin-right:8px;"
+      />
+      <span id="user-name">Sign in with Google</span>
+    </button>
+  </div>
+
   <p id="last-updated-time" class="text-center text-muted">Last updated: Loading...</p>
 
   <!-- Tabs -->
@@ -234,6 +262,25 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+  <!-- User Profile Modal -->
+  <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content text-center p-4">
+        <img
+          id="modal-user-photo"
+          src="images/user-default.png"
+          alt="Profile Picture"
+          class="rounded-circle mb-3"
+          style="width:80px;height:80px;"
+        />
+        <h5 id="modal-user-name">Not signed in</h5>
+        <p id="modal-user-email" class="text-muted mb-3"></p>
+
+        <button id="login-btn" class="btn btn-primary w-100 mb-2">Sign in with Google</button>
+        <button id="logout-btn" class="btn btn-outline-danger w-100" style="display:none;">Log Out</button>
       </div>
     </div>
   </div>

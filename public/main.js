@@ -1,4 +1,217 @@
-// Load Moment.js and Chart.js adapter for time axis support
+// --- Firebase Authentication Setup ---
+const auth = firebase.auth();
+
+document.addEventListener("DOMContentLoaded", () => {
+  const loginBtn = document.getElementById("login-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const userName = document.getElementById("user-name");
+  const userAvatar = document.getElementById("user-avatar");
+  const modalUserName = document.getElementById("modal-user-name");
+  const modalUserEmail = document.getElementById("modal-user-email");
+  const modalUserPhoto = document.getElementById("modal-user-photo");
+
+  // --- Fertigation permission check and auth state update ---
+  async function checkFertigationPermission(user) {
+    const btn = document.getElementById("add-valve-group-btn"); // Make sure this matches your HTML ID
+    if (!btn) return;
+
+    try {
+      const docRef = firebase.firestore().doc("irrigation_devices/Users");
+      const doc = await docRef.get();
+      if (doc.exists) {
+        const data = doc.data();
+        const allowed = data.allowedEmails || [];
+
+        // --- Begin new permission logic for Add Valve Group and queue controls ---
+        if (allowed.includes(user.email)) {
+          // ✅ Enable Add Valve Group button
+          btn.classList.remove("disabled");
+          btn.style.opacity = "";
+          btn.style.pointerEvents = "";
+          btn.onclick = null; // clear unauthorized alert
+          // ✅ Enable queue control buttons
+          document.querySelectorAll('.queue-control-btn').forEach(b => {
+            b.disabled = false;
+            b.classList.remove("disabled");
+            b.style.opacity = "";
+            b.style.pointerEvents = "";
+            // Remove previous unauthorized alert listeners if any
+            b.replaceWith(b.cloneNode(true));
+          });
+          // ✅ Enable select valves button
+          const selectBtn = document.getElementById("select-valves-btn");
+          if (selectBtn) {
+            selectBtn.classList.remove("disabled");
+            selectBtn.style.opacity = "";
+            selectBtn.style.pointerEvents = "";
+            selectBtn.onclick = null; // remove unauthorized alert if previously set
+          }
+          console.log(`✅ ${user.email} authorized to add fertigation queue.`);
+        } else {
+          // 🚫 Simulate disabled Add Valve Group button
+          btn.classList.add("disabled");
+          btn.style.opacity = "0.5";
+          btn.style.pointerEvents = "auto";
+
+          // Remove existing modal click events by cloning and replacing the element
+          const newBtn = btn.cloneNode(true);
+          btn.parentNode.replaceChild(newBtn, btn);
+
+          // Add alert-only behavior
+          newBtn.onclick = (e) => {
+            e.preventDefault();
+            alert("🚫 You are not authorized to add fertigation queues.");
+          };
+          // ✅ Disable queue control buttons
+          document.querySelectorAll('.queue-control-btn').forEach(b => {
+            b.classList.add("disabled");
+            b.style.opacity = "0.5";
+            b.style.pointerEvents = "auto";
+            b.addEventListener("click", (e) => {
+              e.preventDefault();
+              alert("🚫 You are not authorized to modify the fertigation queue.");
+            });
+          });
+          // ✅ Disable select valves button
+          const selectBtn = document.getElementById("select-valves-btn");
+          if (selectBtn) {
+            selectBtn.classList.add("disabled");
+            selectBtn.style.opacity = "0.5";
+            selectBtn.style.pointerEvents = "auto";
+            selectBtn.onclick = (e) => {
+              e.preventDefault();
+              alert("🚫 You are not authorized to select valves.");
+            };
+          }
+          console.warn(`🚫 ${user.email} is not authorized to add fertigation queue.`);
+        }
+        // --- End new permission logic ---
+      } else {
+        console.warn("⚠️ No allowed users list found in Firestore.");
+        btn.disabled = true;
+        // Disable all queue control buttons
+        document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
+      }
+    } catch (err) {
+      console.error("Error checking fertigation permission:", err);
+      btn.disabled = true;
+      // Disable all queue control buttons
+      document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
+    }
+  }
+
+  // Updated auth state listener for fertigation permission
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      console.log("✅ Logged in as:", user.email);
+
+      // Update UI elements
+      userName.textContent = user.displayName;
+      userAvatar.src = user.photoURL || "images/user-default.png";
+
+      modalUserName.textContent = user.displayName;
+      modalUserEmail.textContent = user.email;
+      modalUserPhoto.src = user.photoURL || "images/user-default.png";
+
+      loginBtn.style.display = "none";
+      logoutBtn.style.display = "block";
+
+      // Check fertigation permission
+      await checkFertigationPermission(user);
+
+      // Load dashboard when logged in
+      fetchAllDashboardData();
+    } else {
+      console.log("🚪 Logged out");
+
+      userName.textContent = "Sign in with Google";
+      userAvatar.src = "images/user-default.png";
+
+      modalUserName.textContent = "Not signed in";
+      modalUserEmail.textContent = "";
+      modalUserPhoto.src = "images/user-default.png";
+
+      loginBtn.style.display = "block";
+      logoutBtn.style.display = "none";
+
+      console.log("ℹ️ Dashboard remains visible even when logged out.");
+
+      const btn = document.getElementById("addFertigationBtn");
+      if (btn) {
+        btn.disabled = true;
+        btn.addEventListener("click", () => {
+          alert("🔑 Please sign in to add fertigation queues.");
+        });
+      }
+
+      // If no data is visible, show sign-in modal
+      const liveData = document.getElementById("live-data");
+      if (!liveData || liveData.innerHTML.trim() === "") {
+        const modalElement = document.getElementById("userModal");
+        const signInModal = new bootstrap.Modal(modalElement);
+        setTimeout(() => {
+          signInModal.show();
+          const modalBody = modalElement.querySelector(".modal-body");
+          if (modalBody && !modalBody.querySelector(".signin-reminder")) {
+            const reminder = document.createElement("div");
+            reminder.className = "signin-reminder mt-3 text-center";
+            reminder.innerHTML = `
+              <div class="alert alert-info">
+                <strong>🔑 Please sign in to view your dashboard data.</strong><br>
+                Click "Sign in with Google" to continue.
+              </div>`;
+            modalBody.appendChild(reminder);
+          }
+        }, 800);
+      }
+    }
+  });
+
+  // Handle Login
+  if (loginBtn) {
+    loginBtn.addEventListener("click", async () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try {
+        const result = await auth.signInWithPopup(provider);
+        const user = result.user;
+        alert(`Welcome, ${user.displayName}!`);
+
+        // Immediately update UI without waiting for reload
+        userName.textContent = user.displayName;
+        userAvatar.src = user.photoURL || "images/user-default.png";
+        modalUserName.textContent = user.displayName;
+        modalUserEmail.textContent = user.email;
+        modalUserPhoto.src = user.photoURL || "images/user-default.png";
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "block";
+
+        // Hide modal and load dashboard right away
+        const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
+        modal.hide();
+
+
+        // ✅ Force dashboard refresh instantly
+        fetchAllDashboardData();
+
+      } catch (err) {
+        console.error("Google Sign-In failed:", err);
+        alert("Login failed: " + err.message);
+      }
+    });
+  }
+
+  // Handle Logout
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", async () => {
+      await auth.signOut();
+      alert("Logged out successfully!");
+      const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
+      modal.hide();
+    });
+  }
+});
+
+// --- Load Moment.js and Chart.js adapter for time axis support ---
 const momentScript = document.createElement("script");
 momentScript.src = "https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js";
 momentScript.onload = () => {
@@ -7,12 +220,8 @@ momentScript.onload = () => {
     document.head.appendChild(adapterScript);
 };
 document.head.appendChild(momentScript);
-// Import moment.js and Chart.js moment adapter for time axis support
-// (Include these <script> tags in your HTML before this JS file, or inject here if needed)
-// <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
-// <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
 
-// Fetch live data
+// --- Fetch live data ---
 async function fetchLiveData() {
     const liveContainer = document.getElementById("live-data");
     const currentTimer = document.getElementById("current-timer");
@@ -110,7 +319,7 @@ function drawGauge(canvasId, value, maxValue, color) {
     ctx.fillText(`${value} bar`, centerX, centerY); // Display value in bar
 }
 
-// Update pressure difference bar and value
+// --- Update pressure difference bar and value ---
 function updatePressureDifference(inputPressure, outputPressure) {
     const difference = Math.abs(inputPressure - outputPressure);
     const maxDifference = 3; // Assuming max difference is 6 bar
@@ -134,7 +343,7 @@ function updatePressureDifference(inputPressure, outputPressure) {
     }
 }
 
-// Dashboard Overview
+// --- Dashboard Overview ---
 async function populateDashboardOverview() {
     const snapshot = await db
         .collection("irrigation_devices")
@@ -263,7 +472,7 @@ async function populateDashboardOverview() {
                     '<span style="font-size:2rem;font-weight:bold;">Off</span>';
         }
 
-        // --- Begin: Timer image selection based on open valve(s) ---
+        // --- Timer image selection based on open valve(s) ---
         const timerImagesDiv = document.getElementById("timer-images");
         // Make the container flex and wrap for side-by-side images
         timerImagesDiv.style.display = "flex";
@@ -337,7 +546,6 @@ async function populateDashboardOverview() {
                 timerImagesDiv.appendChild(img);
             });
         }
-        // --- End: Timer image selection based on open valve(s) ---
 
         // Add: Enhanced visuals for Next Timer
         const nextTimerImage = document.getElementById("next-timer-image");
@@ -406,7 +614,7 @@ async function populateDashboardOverview() {
     }
 }
 
-// Timer History
+// --- Timer History ---
 function getTodayDate() {
     const today = new Date();
     return today.toISOString().split("T")[0];
@@ -835,7 +1043,7 @@ async function fetchTimerHistory() {
     }
 }
 
-// Helper function to fetch fertigation logs for a date range
+// --- Helper function to fetch fertigation logs for a date range ---
 async function fetchFertigationLogsForDateRange(fromDate, toDate) {
     const allLogs = [];
     const startDate = new Date(fromDate);
@@ -859,14 +1067,14 @@ async function fetchFertigationLogsForDateRange(fromDate, toDate) {
     return allLogs;
 }
 
-// Helper function to format time duration
+// --- Helper function to format time duration ---
 function formatTimeDuration(minutes) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
 }
 
-// Helper function to get overlapping time between timer and fertigation
+// --- Helper function to get overlapping time between timer and fertigation ---
 function getFertigationOverlap(
     timerStart,
     timerEnd,
@@ -918,8 +1126,8 @@ function wasFertigationActive(fertigationLogs, timerStart, timerEnd) {
     };
 }
 
-// --- Existing code continues unchanged ---
 
+// --- Pressure Graphs ---
 async function graphAllPressures(logs) {
     const chartContainer = document.getElementById("pressure-chart-container");
     chartContainer.innerHTML =
@@ -1197,7 +1405,7 @@ function attachTimerClickHandlers() {
     });
 }
 
-// AI Insights with local anomaly detection and improved display
+// --- AI Insights with local anomaly detection and improved display ---
 async function updateAiInsights() {
     const insightsDiv = document.getElementById("ai-insights");
     insightsDiv.innerHTML =
@@ -1315,7 +1523,7 @@ async function updateAiInsights() {
     }
 }
 
-// Manual AI anomaly test function
+// --- Manual AI anomaly test function ---
 async function runAiAnomalyTest() {
     const insightsDiv = document.getElementById("ai-insights");
     insightsDiv.innerHTML = '<p class="text-muted">Running AI analysis...</p>';
@@ -1342,7 +1550,7 @@ async function runAiAnomalyTest() {
     }
 }
 
-// Update the fetchAllDashboardData function to trigger the Cloud Function before fetching dashboard data
+// --- Dashboard Data Fetch: Triggers Cloud Function before loading ---
 async function fetchAllDashboardData() {
     // Replace <REGION> and <PROJECT_ID> with your actual values
     const cloudFunctionUrl = "https://fetchirrigationdataondemand-m2hab33w6q-uc.a.run.app";
@@ -1361,55 +1569,48 @@ async function fetchAllDashboardData() {
     ]);
 }
 
-// Initial fetch
-fetchAllDashboardData();
-
 // Fetch every 5 minutes
 setInterval(fetchAllDashboardData, 5 * 60 * 1000);
 
-// Populate the timer dropdown on page load
+// --- Populate the timer dropdown and set up history/pressure analysis ---
 document.addEventListener("DOMContentLoaded", () => {
-    populateTimerDropdown();
-    document
-        .getElementById("fetch-history-btn")
-        .addEventListener("click", fetchTimerHistory);
-    document
-        .getElementById("analyze-pressure-btn")
-        .addEventListener("click", () => {
-            const timerName = document.getElementById(
-                "pressure-timer-dropdown"
-            ).value;
-            if (timerName) {
-                // Fetch the logs for this timer and graph pressures
-                fetch("https://dcon.mobitechwireless.com/v1/http/", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                    body: new URLSearchParams({
-                        action: "logs",
-                        method: "timer_log",
-                        serial_no: "MCON874Q000568",
-                        from: getTodayDate(),
-                        to: getTodayDate(),
-                        timer_name: timerName,
-                    }),
-                })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        if (data.log && data.log.length > 0) {
-                            graphAllPressures(data.log);
-                        }
-                    })
-                    .catch((error) =>
-                        console.error("Failed to fetch timer data:", error)
-                    );
+  populateTimerDropdown();
+  document
+    .getElementById("fetch-history-btn")
+    .addEventListener("click", fetchTimerHistory);
+  document
+    .getElementById("analyze-pressure-btn")
+    .addEventListener("click", () => {
+      const timerName = document.getElementById("pressure-timer-dropdown").value;
+      if (timerName) {
+        fetch("https://dcon.mobitechwireless.com/v1/http/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            action: "logs",
+            method: "timer_log",
+            serial_no: "MCON874Q000568",
+            from: getTodayDate(),
+            to: getTodayDate(),
+            timer_name: timerName,
+          }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.log && data.log.length > 0) {
+              graphAllPressures(data.log);
             }
-        });
+          })
+          .catch((error) =>
+            console.error("Failed to fetch timer data:", error)
+          );
+      }
+    });
 });
 
-// Fertigation Management
-// Helper to get active fertigation log from dedicated collection
+// --- Fertigation Management ---
 async function getActiveFertigationLog() {
     const logsRef = db
         .collection("irrigation_devices")
@@ -1424,7 +1625,6 @@ async function getActiveFertigationLog() {
     return activeQuery.empty ? null : activeQuery.docs[0];
 }
 
-// Add this function before listenFertigationStatus
 function updateFertigationStatus(isActive, startTime, notes) {
     const statusDot = document.getElementById("fertigation-status-dot");
     const statusText = document.getElementById("fertigation-status-text");
@@ -1468,7 +1668,6 @@ function updateFertigationStatus(isActive, startTime, notes) {
     notesDisplay.textContent = notes || "";
 }
 
-// Listen for fertigation status changes in real-time
 function listenFertigationStatus() {
     const logsRef = db
         .collection("irrigation_devices")
@@ -1618,18 +1817,13 @@ async function loadFertigationHistory() {
     }
 }
 
-// Add event listeners when DOM is loaded
+// --- Fertigation: Event listeners and real-time updates ---
 document.addEventListener("DOMContentLoaded", () => {
-    // Initialize fertigation features
-    loadFertigationHistory();
-    // Listen for fertigation status changes in real-time
-    listenFertigationStatus();
-    // Remove event listener for manual tab open (automatic updates via Firestore below)
-    // document.getElementById('fertigation-logs-tab').addEventListener('shown.bs.tab', loadFertigationHistory);
+  loadFertigationHistory();
+  listenFertigationStatus();
 });
 
-// Real-time Firestore listeners for fertigation history and valve queue
-// 1. Fertigation history: update on any change to 'fertigation_logs'
+// --- Real-time Firestore listeners for fertigation history and valve queue ---
 db.collection("irrigation_devices")
     .doc("MCON874Q000568")
     .collection("fertigation_logs")
@@ -1637,7 +1831,6 @@ db.collection("irrigation_devices")
         loadFertigationHistory();
     });
 
-// 2. Valve queue: update on any change to 'fertigation_queue/current_queue'
 db.collection("irrigation_devices")
     .doc("MCON874Q000568")
     .collection("fertigation_queue")
@@ -1646,24 +1839,7 @@ db.collection("irrigation_devices")
         loadValveQueueFromFirestore();
     });
 
-// Add these styles to the existing stylesheet or create a new one
-const style = document.createElement("style");
-style.textContent = `
-  .sortable {
-    cursor: pointer;
-    user-select: none;
-  }
-  .sortable:hover {
-    background-color: #f8f9fa;
-  }
-  .sort-icon {
-    font-size: 0.8em;
-    margin-left: 5px;
-  }
-`;
-document.head.appendChild(style);
 // --- Valve Groups Tab Support ---
-// Overwrite the Valve Groups tab logic to combine segments with the same timer name into a single chart, with each segment highlighted in a different color
 async function populateValveGroupCards() {
     const valveCardsContainer = document.getElementById("valve-group-cards");
     valveCardsContainer.innerHTML =
@@ -1723,7 +1899,7 @@ async function populateValveGroupCards() {
     }
 }
 
-// Replace renderMergedPressureChart with logic that truncates empty spaces across all logs for a timer
+// --- Render merged pressure chart for valve groups ---
 async function renderMergedPressureChart(logs, canvasId, timerName) {
     try {
         const datasets = [];
@@ -1875,15 +2051,13 @@ async function renderMergedPressureChart(logs, canvasId, timerName) {
 }
 
 document
-    .getElementById("valve-groups-tab")
-    .addEventListener("shown.bs.tab", populateValveGroupCards);
+  .getElementById("valve-groups-tab")
+  .addEventListener("shown.bs.tab", populateValveGroupCards);
 
 // --- Fertigation Valve Queue Management ---
 const valveGroupQueue = [];
 
-/**
- * Render the fertigation valve group queue UI.
- */
+// Render the fertigation valve group queue UI.
 function renderValveGroupQueue() {
     const list = document.getElementById("valve-group-queue-list");
     list.innerHTML = "";
@@ -1896,19 +2070,31 @@ function renderValveGroupQueue() {
             "list-group-item d-flex justify-content-between align-items-center";
         li.innerHTML = `
       <span>${valveNames}</span>
-      <div>
-        <button class="btn btn-sm btn-outline-secondary me-1" onclick="moveUpInValveGroupQueue(${index})">⬆️</button>
-        <button class="btn btn-sm btn-outline-secondary me-1" onclick="moveDownInValveGroupQueue(${index})">⬇️</button>
-        <button class="btn btn-sm btn-outline-danger" onclick="removeFromValveGroupQueue(${index})">❌</button>
-      </div>
+        <div>
+        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveUpInValveGroupQueue(${index})">⬆️</button>
+        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveDownInValveGroupQueue(${index})">⬇️</button>
+        <button class="btn btn-sm btn-outline-danger queue-control-btn" onclick="removeFromValveGroupQueue(${index})">❌</button>
+        </div>
     `;
         list.appendChild(li);
+        // Disable queue controls if add button is disabled
+        const addBtn = document.getElementById("add-valve-group-btn");
+        if (addBtn && addBtn.disabled) {
+          li.querySelectorAll(".queue-control-btn").forEach(b => {
+            // Don't use actual disabled state — simulate it
+            b.classList.add("disabled");
+            b.style.opacity = "0.5";
+            b.style.pointerEvents = "auto"; // keep clickable
+            b.addEventListener("click", (e) => {
+              e.preventDefault();
+              alert("🚫 You are not authorized to modify the fertigation queue.");
+            });
+          });
+        }
     });
 }
 
-/**
- * Load the fertigation valve queue from Firestore and render.
- */
+// Load the fertigation valve queue from Firestore and render.
 async function loadValveQueueFromFirestore() {
     valveGroupQueue.length = 0;
     try {
