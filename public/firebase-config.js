@@ -14,3 +14,19 @@ firebase.initializeApp(firebaseConfig);
 
 // Export the database instance
 const db = firebase.firestore();
+
+// Connect to emulators if running locally
+if (window.location.hostname === "localhost") {
+  console.log("Connecting to Firebase Emulators...");
+  /*
+  db.settings({
+    host: "localhost:8082",
+    ssl: false
+  });
+  */
+  /*
+  if (firebase.auth) {
+    firebase.auth().useEmulator("http://localhost:9099");
+  }
+  */
+}

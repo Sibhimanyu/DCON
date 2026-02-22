@@ -2,213 +2,213 @@
 const auth = firebase.auth();
 
 document.addEventListener("DOMContentLoaded", () => {
-  const loginBtn = document.getElementById("login-btn");
-  const logoutBtn = document.getElementById("logout-btn");
-  const userName = document.getElementById("user-name");
-  const userAvatar = document.getElementById("user-avatar");
-  const modalUserName = document.getElementById("modal-user-name");
-  const modalUserEmail = document.getElementById("modal-user-email");
-  const modalUserPhoto = document.getElementById("modal-user-photo");
+    const loginBtn = document.getElementById("login-btn");
+    const logoutBtn = document.getElementById("logout-btn");
+    const userName = document.getElementById("user-name");
+    const userAvatar = document.getElementById("user-avatar");
+    const modalUserName = document.getElementById("modal-user-name");
+    const modalUserEmail = document.getElementById("modal-user-email");
+    const modalUserPhoto = document.getElementById("modal-user-photo");
 
-  // --- Fertigation permission check and auth state update ---
-  async function checkFertigationPermission(user) {
-    const btn = document.getElementById("add-valve-group-btn"); // Make sure this matches your HTML ID
-    if (!btn) return;
+    // --- Fertigation permission check and auth state update ---
+    async function checkFertigationPermission(user) {
+        const btn = document.getElementById("add-valve-group-btn"); // Make sure this matches your HTML ID
+        if (!btn) return;
 
-    try {
-      const docRef = firebase.firestore().doc("irrigation_devices/Users");
-      const doc = await docRef.get();
-      if (doc.exists) {
-        const data = doc.data();
-        const allowed = data.allowedEmails || [];
+        try {
+            const docRef = firebase.firestore().doc("irrigation_devices/Users");
+            const doc = await docRef.get();
+            if (doc.exists) {
+                const data = doc.data();
+                const allowed = data.allowedEmails || [];
 
-        // --- Begin new permission logic for Add Valve Group and queue controls ---
-        if (allowed.includes(user.email)) {
-          // ✅ Enable Add Valve Group button
-          btn.classList.remove("disabled");
-          btn.style.opacity = "";
-          btn.style.pointerEvents = "";
-          btn.onclick = null; // clear unauthorized alert
-          // ✅ Enable queue control buttons
-          document.querySelectorAll('.queue-control-btn').forEach(b => {
-            b.disabled = false;
-            b.classList.remove("disabled");
-            b.style.opacity = "";
-            b.style.pointerEvents = "";
-            // Remove previous unauthorized alert listeners if any
-            b.replaceWith(b.cloneNode(true));
-          });
-          // ✅ Enable select valves button
-          const selectBtn = document.getElementById("select-valves-btn");
-          if (selectBtn) {
-            selectBtn.classList.remove("disabled");
-            selectBtn.style.opacity = "";
-            selectBtn.style.pointerEvents = "";
-            selectBtn.onclick = null; // remove unauthorized alert if previously set
-          }
-          console.log(`✅ ${user.email} authorized to add fertigation queue.`);
-        } else {
-          // 🚫 Simulate disabled Add Valve Group button
-          btn.classList.add("disabled");
-          btn.style.opacity = "0.5";
-          btn.style.pointerEvents = "auto";
+                // --- Begin new permission logic for Add Valve Group and queue controls ---
+                if (allowed.includes(user.email)) {
+                    // ✅ Enable Add Valve Group button
+                    btn.classList.remove("disabled");
+                    btn.style.opacity = "";
+                    btn.style.pointerEvents = "";
+                    btn.onclick = null; // clear unauthorized alert
+                    // ✅ Enable queue control buttons
+                    document.querySelectorAll('.queue-control-btn').forEach(b => {
+                        b.disabled = false;
+                        b.classList.remove("disabled");
+                        b.style.opacity = "";
+                        b.style.pointerEvents = "";
+                        // Remove previous unauthorized alert listeners if any
+                        b.replaceWith(b.cloneNode(true));
+                    });
+                    // ✅ Enable select valves button
+                    const selectBtn = document.getElementById("select-valves-btn");
+                    if (selectBtn) {
+                        selectBtn.classList.remove("disabled");
+                        selectBtn.style.opacity = "";
+                        selectBtn.style.pointerEvents = "";
+                        selectBtn.onclick = null; // remove unauthorized alert if previously set
+                    }
+                    console.log(`✅ ${user.email} authorized to add fertigation queue.`);
+                } else {
+                    // 🚫 Simulate disabled Add Valve Group button
+                    btn.classList.add("disabled");
+                    btn.style.opacity = "0.5";
+                    btn.style.pointerEvents = "auto";
 
-          // Remove existing modal click events by cloning and replacing the element
-          const newBtn = btn.cloneNode(true);
-          btn.parentNode.replaceChild(newBtn, btn);
+                    // Remove existing modal click events by cloning and replacing the element
+                    const newBtn = btn.cloneNode(true);
+                    btn.parentNode.replaceChild(newBtn, btn);
 
-          // Add alert-only behavior
-          newBtn.onclick = (e) => {
-            e.preventDefault();
-            alert("🚫 You are not authorized to add fertigation queues.");
-          };
-          // ✅ Disable queue control buttons
-          document.querySelectorAll('.queue-control-btn').forEach(b => {
-            b.classList.add("disabled");
-            b.style.opacity = "0.5";
-            b.style.pointerEvents = "auto";
-            b.addEventListener("click", (e) => {
-              e.preventDefault();
-              alert("🚫 You are not authorized to modify the fertigation queue.");
-            });
-          });
-          // ✅ Disable select valves button
-          const selectBtn = document.getElementById("select-valves-btn");
-          if (selectBtn) {
-            selectBtn.classList.add("disabled");
-            selectBtn.style.opacity = "0.5";
-            selectBtn.style.pointerEvents = "auto";
-            selectBtn.onclick = (e) => {
-              e.preventDefault();
-              alert("🚫 You are not authorized to select valves.");
-            };
-          }
-          console.warn(`🚫 ${user.email} is not authorized to add fertigation queue.`);
+                    // Add alert-only behavior
+                    newBtn.onclick = (e) => {
+                        e.preventDefault();
+                        alert("🚫 You are not authorized to add fertigation queues.");
+                    };
+                    // ✅ Disable queue control buttons
+                    document.querySelectorAll('.queue-control-btn').forEach(b => {
+                        b.classList.add("disabled");
+                        b.style.opacity = "0.5";
+                        b.style.pointerEvents = "auto";
+                        b.addEventListener("click", (e) => {
+                            e.preventDefault();
+                            alert("🚫 You are not authorized to modify the fertigation queue.");
+                        });
+                    });
+                    // ✅ Disable select valves button
+                    const selectBtn = document.getElementById("select-valves-btn");
+                    if (selectBtn) {
+                        selectBtn.classList.add("disabled");
+                        selectBtn.style.opacity = "0.5";
+                        selectBtn.style.pointerEvents = "auto";
+                        selectBtn.onclick = (e) => {
+                            e.preventDefault();
+                            alert("🚫 You are not authorized to select valves.");
+                        };
+                    }
+                    console.warn(`🚫 ${user.email} is not authorized to add fertigation queue.`);
+                }
+                // --- End new permission logic ---
+            } else {
+                console.warn("⚠️ No allowed users list found in Firestore.");
+                btn.disabled = true;
+                // Disable all queue control buttons
+                document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
+            }
+        } catch (err) {
+            console.error("Error checking fertigation permission:", err);
+            btn.disabled = true;
+            // Disable all queue control buttons
+            document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
         }
-        // --- End new permission logic ---
-      } else {
-        console.warn("⚠️ No allowed users list found in Firestore.");
-        btn.disabled = true;
-        // Disable all queue control buttons
-        document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
-      }
-    } catch (err) {
-      console.error("Error checking fertigation permission:", err);
-      btn.disabled = true;
-      // Disable all queue control buttons
-      document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
     }
-  }
 
-  // Updated auth state listener for fertigation permission
-  auth.onAuthStateChanged(async (user) => {
-    if (user) {
-      console.log("✅ Logged in as:", user.email);
+    // Updated auth state listener for fertigation permission
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            console.log("✅ Logged in as:", user.email);
 
-      // Update UI elements
-      userName.textContent = user.displayName;
-      userAvatar.src = user.photoURL || "images/user-default.png";
+            // Update UI elements
+            userName.textContent = user.displayName;
+            userAvatar.src = user.photoURL || "images/user-default.png";
 
-      modalUserName.textContent = user.displayName;
-      modalUserEmail.textContent = user.email;
-      modalUserPhoto.src = user.photoURL || "images/user-default.png";
+            modalUserName.textContent = user.displayName;
+            modalUserEmail.textContent = user.email;
+            modalUserPhoto.src = user.photoURL || "images/user-default.png";
 
-      loginBtn.style.display = "none";
-      logoutBtn.style.display = "block";
+            loginBtn.style.display = "none";
+            logoutBtn.style.display = "block";
 
-      // Check fertigation permission
-      await checkFertigationPermission(user);
+            // Check fertigation permission
+            await checkFertigationPermission(user);
 
-      // Load dashboard when logged in
-      fetchAllDashboardData();
-    } else {
-      console.log("🚪 Logged out");
+            // Load dashboard when logged in
+            fetchAllDashboardData();
+        } else {
+            console.log("🚪 Logged out");
 
-      userName.textContent = "Sign in with Google";
-      userAvatar.src = "images/user-default.png";
+            userName.textContent = "Sign in with Google";
+            userAvatar.src = "images/user-default.png";
 
-      modalUserName.textContent = "Not signed in";
-      modalUserEmail.textContent = "";
-      modalUserPhoto.src = "images/user-default.png";
+            modalUserName.textContent = "Not signed in";
+            modalUserEmail.textContent = "";
+            modalUserPhoto.src = "images/user-default.png";
 
-      loginBtn.style.display = "block";
-      logoutBtn.style.display = "none";
+            loginBtn.style.display = "block";
+            logoutBtn.style.display = "none";
 
-      console.log("ℹ️ Dashboard remains visible even when logged out.");
+            console.log("ℹ️ Dashboard remains visible even when logged out.");
 
-      const btn = document.getElementById("addFertigationBtn");
-      if (btn) {
-        btn.disabled = true;
-        btn.addEventListener("click", () => {
-          alert("🔑 Please sign in to add fertigation queues.");
-        });
-      }
+            const btn = document.getElementById("addFertigationBtn");
+            if (btn) {
+                btn.disabled = true;
+                btn.addEventListener("click", () => {
+                    alert("🔑 Please sign in to add fertigation queues.");
+                });
+            }
 
-      // If no data is visible, show sign-in modal
-      const liveData = document.getElementById("live-data");
-      if (!liveData || liveData.innerHTML.trim() === "") {
-        const modalElement = document.getElementById("userModal");
-        const signInModal = new bootstrap.Modal(modalElement);
-        setTimeout(() => {
-          signInModal.show();
-          const modalBody = modalElement.querySelector(".modal-body");
-          if (modalBody && !modalBody.querySelector(".signin-reminder")) {
-            const reminder = document.createElement("div");
-            reminder.className = "signin-reminder mt-3 text-center";
-            reminder.innerHTML = `
+            // If no data is visible, show sign-in modal
+            const liveData = document.getElementById("live-data");
+            if (!liveData || liveData.innerHTML.trim() === "") {
+                const modalElement = document.getElementById("userModal");
+                const signInModal = new bootstrap.Modal(modalElement);
+                setTimeout(() => {
+                    signInModal.show();
+                    const modalBody = modalElement.querySelector(".modal-body");
+                    if (modalBody && !modalBody.querySelector(".signin-reminder")) {
+                        const reminder = document.createElement("div");
+                        reminder.className = "signin-reminder mt-3 text-center";
+                        reminder.innerHTML = `
               <div class="alert alert-info">
                 <strong>🔑 Please sign in to view your dashboard data.</strong><br>
                 Click "Sign in with Google" to continue.
               </div>`;
-            modalBody.appendChild(reminder);
-          }
-        }, 800);
-      }
+                        modalBody.appendChild(reminder);
+                    }
+                }, 800);
+            }
+        }
+    });
+
+    // Handle Login
+    if (loginBtn) {
+        loginBtn.addEventListener("click", async () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            try {
+                const result = await auth.signInWithPopup(provider);
+                const user = result.user;
+                alert(`Welcome, ${user.displayName}!`);
+
+                // Immediately update UI without waiting for reload
+                userName.textContent = user.displayName;
+                userAvatar.src = user.photoURL || "images/user-default.png";
+                modalUserName.textContent = user.displayName;
+                modalUserEmail.textContent = user.email;
+                modalUserPhoto.src = user.photoURL || "images/user-default.png";
+                loginBtn.style.display = "none";
+                logoutBtn.style.display = "block";
+
+                // Hide modal and load dashboard right away
+                const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
+                modal.hide();
+
+
+                // ✅ Force dashboard refresh instantly
+                fetchAllDashboardData();
+
+            } catch (err) {
+                console.error("Google Sign-In failed:", err);
+                alert("Login failed: " + err.message);
+            }
+        });
     }
-  });
 
-  // Handle Login
-  if (loginBtn) {
-    loginBtn.addEventListener("click", async () => {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      try {
-        const result = await auth.signInWithPopup(provider);
-        const user = result.user;
-        alert(`Welcome, ${user.displayName}!`);
-
-        // Immediately update UI without waiting for reload
-        userName.textContent = user.displayName;
-        userAvatar.src = user.photoURL || "images/user-default.png";
-        modalUserName.textContent = user.displayName;
-        modalUserEmail.textContent = user.email;
-        modalUserPhoto.src = user.photoURL || "images/user-default.png";
-        loginBtn.style.display = "none";
-        logoutBtn.style.display = "block";
-
-        // Hide modal and load dashboard right away
-        const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
-        modal.hide();
-
-
-        // ✅ Force dashboard refresh instantly
-        fetchAllDashboardData();
-
-      } catch (err) {
-        console.error("Google Sign-In failed:", err);
-        alert("Login failed: " + err.message);
-      }
-    });
-  }
-
-  // Handle Logout
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-      await auth.signOut();
-      alert("Logged out successfully!");
-      const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
-      modal.hide();
-    });
-  }
+    // Handle Logout
+    if (logoutBtn) {
+        logoutBtn.addEventListener("click", async () => {
+            await auth.signOut();
+            alert("Logged out successfully!");
+            const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
+            modal.hide();
+        });
+    }
 });
 
 // --- Load Moment.js and Chart.js adapter for time axis support ---
@@ -553,9 +553,8 @@ async function populateDashboardOverview() {
             "dashboard-next-timer"
         );
         if (timers.next && timers.next.name) {
-            dashboardNextTimer.textContent = `${timers.next.name} (On Time: ${
-                timers.next.on_time ?? "N/A"
-            })`;
+            dashboardNextTimer.textContent = `${timers.next.name} (On Time: ${timers.next.on_time ?? "N/A"
+                })`;
             let nextTimerName = timers.next.name?.toLowerCase() || "";
             if (nextTimerName.includes("coco")) {
                 nextTimerImage.src = "images/coconut.png";
@@ -745,8 +744,8 @@ async function fetchTimerHistory() {
                                 end = log.endTime?.toDate
                                     ? log.endTime.toDate()
                                     : log.endTime
-                                    ? new Date(log.endTime)
-                                    : new Date(); // if still active
+                                        ? new Date(log.endTime)
+                                        : new Date(); // if still active
                             } catch {
                                 end = new Date(); // fallback to now
                             }
@@ -772,17 +771,17 @@ async function fetchTimerHistory() {
 
         const filteredLogs = timerName
             ? logs.filter((log, index) => {
-                  if (log.timer_name === timerName) return true;
-                  if (
-                      index > 0 &&
-                      logs[index - 1].timer_name === timerName &&
-                      logs[index - 1].completed === "0" &&
-                      log.timer_name.toLowerCase().includes("backwash")
-                  ) {
-                      return true;
-                  }
-                  return false;
-              })
+                if (log.timer_name === timerName) return true;
+                if (
+                    index > 0 &&
+                    logs[index - 1].timer_name === timerName &&
+                    logs[index - 1].completed === "0" &&
+                    log.timer_name.toLowerCase().includes("backwash")
+                ) {
+                    return true;
+                }
+                return false;
+            })
             : logs;
 
         if (filteredLogs.length === 0) {
@@ -809,103 +808,103 @@ async function fetchTimerHistory() {
       </thead>
       <tbody>
         ${filteredLogs
-            .map((log) => {
-                const fertigationInfo = wasFertigationActive(
-                    fertigationLogs,
-                    new Date(log.dt),
-                    new Date(log.last_sync)
-                );
-                let fertigationCell = "-";
-                if (fertigationInfo) {
-                    fertigationCell = `
+                .map((log) => {
+                    const fertigationInfo = wasFertigationActive(
+                        fertigationLogs,
+                        new Date(log.dt),
+                        new Date(log.last_sync)
+                    );
+                    let fertigationCell = "-";
+                    if (fertigationInfo) {
+                        fertigationCell = `
               <div class="d-flex flex-column align-items-center">
                 <div class="progress w-100 mb-1" style="height: 5px;">
                   <div class="progress-bar bg-success" style="width: ${fertigationInfo.percentage}%"></div>
                 </div>
                 <small>${fertigationInfo.duration}</small>
               </div>`;
-                }
-
-                // Generate valve images using the same logic as dashboard
-                let valveImages = "";
-                let openValveNos = [];
-                if (log.on_valves) {
-                    const valveArr = log.on_valves.split("-");
-                    // Get list of open valves
-                    for (let i = 0; i < valveArr.length; i++) {
-                        if (valveArr[i] !== "0") {
-                            openValveNos.push(valveArr[i]);
-                        }
                     }
 
-                    // Generate images for each open valve
-                    openValveNos.forEach((valveNo) => {
-                        let valveName = "";
-                        if (valveNo && valveDetails[valveNo]) {
-                            valveName =
-                                valveDetails[
-                                    valveNo
-                                ].valve_name?.toLowerCase() || "";
+                    // Generate valve images using the same logic as dashboard
+                    let valveImages = "";
+                    let openValveNos = [];
+                    if (log.on_valves) {
+                        const valveArr = log.on_valves.split("-");
+                        // Get list of open valves
+                        for (let i = 0; i < valveArr.length; i++) {
+                            if (valveArr[i] !== "0") {
+                                openValveNos.push(valveArr[i]);
+                            }
                         }
 
-                        let imgSrc = "images/timer-default.png";
-                        if (valveName.includes("coco"))
-                            imgSrc = "images/coconut.png";
-                        else if (valveName.includes("mango"))
-                            imgSrc = "images/mango.png";
-                        else if (valveName.includes("house"))
-                            imgSrc = "images/house.png";
-                        else if (valveName.includes("jamun"))
-                            imgSrc = "images/jamun.png";
-                        else if (valveName.includes("amla"))
-                            imgSrc = "images/amla.png";
-                        else if (valveName.includes("backwash"))
-                            imgSrc = "images/backwash.png";
-                        else if (valveName.includes("grass"))
-                            imgSrc = "images/grass.png";
-                        else if (
-                            valveName.includes("guava") ||
-                            valveName.includes("gova")
-                        )
-                            imgSrc = "images/guava.png";
-                        else if (valveName.includes("onion"))
-                            imgSrc = "images/onion.png";
-                        else if (valveName.includes("pome"))
-                            imgSrc = "images/pomegranate.png";
-                        else if (valveName.includes("veg"))
-                            imgSrc = "images/veg.png";
-                        else if (valveName.includes("kulam"))
-                            imgSrc = "images/kulam.png";
-                        else if (valveName.includes("mulberry"))
-                            imgSrc = "images/mulberry.png";
-                        else if (!valveName) imgSrc = "images/none.png";
+                        // Generate images for each open valve
+                        openValveNos.forEach((valveNo) => {
+                            let valveName = "";
+                            if (valveNo && valveDetails[valveNo]) {
+                                valveName =
+                                    valveDetails[
+                                        valveNo
+                                    ].valve_name?.toLowerCase() || "";
+                            }
 
-                        valveImages += `
+                            let imgSrc = "images/timer-default.png";
+                            if (valveName.includes("coco"))
+                                imgSrc = "images/coconut.png";
+                            else if (valveName.includes("mango"))
+                                imgSrc = "images/mango.png";
+                            else if (valveName.includes("house"))
+                                imgSrc = "images/house.png";
+                            else if (valveName.includes("jamun"))
+                                imgSrc = "images/jamun.png";
+                            else if (valveName.includes("amla"))
+                                imgSrc = "images/amla.png";
+                            else if (valveName.includes("backwash"))
+                                imgSrc = "images/backwash.png";
+                            else if (valveName.includes("grass"))
+                                imgSrc = "images/grass.png";
+                            else if (
+                                valveName.includes("guava") ||
+                                valveName.includes("gova")
+                            )
+                                imgSrc = "images/guava.png";
+                            else if (valveName.includes("onion"))
+                                imgSrc = "images/onion.png";
+                            else if (valveName.includes("pome"))
+                                imgSrc = "images/pomegranate.png";
+                            else if (valveName.includes("veg"))
+                                imgSrc = "images/veg.png";
+                            else if (valveName.includes("kulam"))
+                                imgSrc = "images/kulam.png";
+                            else if (valveName.includes("mulberry"))
+                                imgSrc = "images/mulberry.png";
+                            else if (!valveName) imgSrc = "images/none.png";
+
+                            valveImages += `
                 <div class="d-inline-block text-center" style="margin: 2px;">
                   <img src="${imgSrc}" alt="Valve ${valveNo}" style="width: 30px;">
                 </div>`;
-                    });
-                }
+                        });
+                    }
 
-                if (!valveImages) {
-                    valveImages = `
+                    if (!valveImages) {
+                        valveImages = `
               <div class="d-inline-block text-center" style="margin: 2px;">
                 <img src="images/none.png" alt="No Valve" style="width: 30px;">
               </div>`;
-                }
+                    }
 
-                // New: Valve Names Cell
-                const valveNamesCell = openValveNos.length
-                    ? openValveNos
-                          .map(
-                              (v) =>
-                                  valveDetails[v]?.valve_name ||
-                                  `Valve ${v}`
-                          )
-                          .join(", ")
-                    : "-";
+                    // New: Valve Names Cell
+                    const valveNamesCell = openValveNos.length
+                        ? openValveNos
+                            .map(
+                                (v) =>
+                                    valveDetails[v]?.valve_name ||
+                                    `Valve ${v}`
+                            )
+                            .join(", ")
+                        : "-";
 
-                return `
+                    return `
             <tr style="cursor: pointer;">
               <td>${log.dt}</td>
               <td>${log.last_sync}</td>
@@ -918,8 +917,8 @@ async function fetchTimerHistory() {
               <td class="text-center" style="min-width: 100px;">${fertigationCell}</td>
             </tr>
           `;
-            })
-            .join("")}
+                })
+                .join("")}
       </tbody>
     `;
         timerHistoryContent.innerHTML = "";
@@ -1206,8 +1205,8 @@ async function graphAllPressures(logs) {
                             isBackwash && !shownBackwash
                                 ? "Backwash (Input)"
                                 : labelName
-                                ? `${labelName} (Input)`
-                                : "",
+                                    ? `${labelName} (Input)`
+                                    : "",
                         data: segment.data.map((entry) => ({
                             x: entry.dt,
                             y: parseFloat(entry.pressure.split("-")[0]),
@@ -1223,8 +1222,8 @@ async function graphAllPressures(logs) {
                             isBackwash && !shownBackwash
                                 ? "Backwash (Output)"
                                 : labelName
-                                ? `${labelName} (Output)`
-                                : "",
+                                    ? `${labelName} (Output)`
+                                    : "",
                         data: segment.data.map((entry) => ({
                             x: entry.dt,
                             y: parseFloat(entry.pressure.split("-")[1]),
@@ -1444,8 +1443,7 @@ async function updateAiInsights() {
                     ) / history.length || 0;
                 if (avg > 0 && live[phase] < avg * 0.8) {
                     anomalies.push(
-                        `${phase.replace(/_/g, " ")} is low (${
-                            live[phase]
+                        `${phase.replace(/_/g, " ")} is low (${live[phase]
                         }V, avg ${avg.toFixed(1)}V).`
                     );
                 }
@@ -1574,40 +1572,40 @@ setInterval(fetchAllDashboardData, 5 * 60 * 1000);
 
 // --- Populate the timer dropdown and set up history/pressure analysis ---
 document.addEventListener("DOMContentLoaded", () => {
-  populateTimerDropdown();
-  document
-    .getElementById("fetch-history-btn")
-    .addEventListener("click", fetchTimerHistory);
-  document
-    .getElementById("analyze-pressure-btn")
-    .addEventListener("click", () => {
-      const timerName = document.getElementById("pressure-timer-dropdown").value;
-      if (timerName) {
-        fetch("https://dcon.mobitechwireless.com/v1/http/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            action: "logs",
-            method: "timer_log",
-            serial_no: "MCON874Q000568",
-            from: getTodayDate(),
-            to: getTodayDate(),
-            timer_name: timerName,
-          }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.log && data.log.length > 0) {
-              graphAllPressures(data.log);
+    populateTimerDropdown();
+    document
+        .getElementById("fetch-history-btn")
+        .addEventListener("click", fetchTimerHistory);
+    document
+        .getElementById("analyze-pressure-btn")
+        .addEventListener("click", () => {
+            const timerName = document.getElementById("pressure-timer-dropdown").value;
+            if (timerName) {
+                fetch("https://dcon.mobitechwireless.com/v1/http/", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: new URLSearchParams({
+                        action: "logs",
+                        method: "timer_log",
+                        serial_no: "MCON874Q000568",
+                        from: getTodayDate(),
+                        to: getTodayDate(),
+                        timer_name: timerName,
+                    }),
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        if (data.log && data.log.length > 0) {
+                            graphAllPressures(data.log);
+                        }
+                    })
+                    .catch((error) =>
+                        console.error("Failed to fetch timer data:", error)
+                    );
             }
-          })
-          .catch((error) =>
-            console.error("Failed to fetch timer data:", error)
-          );
-      }
-    });
+        });
 });
 
 // --- Fertigation Management ---
@@ -1701,33 +1699,71 @@ function listenFertigationStatus() {
     });
 }
 
-async function loadFertigationHistory() {
+async function loadFertigationHistory(isLoadMore = false) {
     const historyTableBody = document.getElementById("fertigation-history");
-    historyTableBody.innerHTML =
-        '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
+    const loadMoreBtn = document.getElementById("load-more-fert-btn");
+
+    if (!isLoadMore) {
+        historyTableBody.innerHTML =
+            '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
+        lastFertDoc = null;
+    } else {
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.textContent = "Loading...";
+    }
 
     try {
-        // Fetch last 10 fertigation logs from Firestore
-        const logsRef = db
+        // Fetch valve details for mapping indices to names
+        const latestSnapshot = await db
             .collection("irrigation_devices")
             .doc("MCON874Q000568")
-            .collection("fertigation_logs");
-
-        // Get last 7 days of logs
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-        const snapshot = await logsRef
-            .where("startTime", ">=", sevenDaysAgo)
-            .orderBy("startTime", "desc")
-            .limit(10)
+            .collection(getTodayDate())
+            .orderBy("timestamp", "desc")
+            .limit(1)
             .get();
 
+        const latestData = !latestSnapshot.empty ? latestSnapshot.docs[0].data() : {};
+        const valveDetails = latestData.summary?.valve_details || {};
+
+        // Fetch fertigation logs from Firestore
+        let query = db
+            .collection("irrigation_devices")
+            .doc("MCON874Q000568")
+            .collection("fertigation_logs")
+            .orderBy("startTime", "desc");
+
+        const fromVal = document.getElementById("fert-history-from-date").value;
+        const toVal = document.getElementById("fert-history-to-date").value;
+
+        if (fromVal) {
+            query = query.where("startTime", ">=", new Date(fromVal));
+        }
+        if (toVal) {
+            // Set end of day for "To" date
+            const toDate = new Date(toVal);
+            toDate.setHours(23, 59, 59, 999);
+            query = query.where("startTime", "<=", toDate);
+        }
+
+        if (isLoadMore && lastFertDoc) {
+            query = query.startAfter(lastFertDoc);
+        }
+
+        const snapshot = await query.limit(10).get();
+
         if (snapshot.empty) {
-            historyTableBody.innerHTML =
-                '<tr><td colspan="4" class="text-center">No fertigation history found</td></tr>';
+            if (!isLoadMore) {
+                historyTableBody.innerHTML =
+                    '<tr><td colspan="4" class="text-center">No fertigation history found</td></tr>';
+            }
+            loadMoreBtn.style.display = "none";
             return;
         }
+
+        lastFertDoc = snapshot.docs[snapshot.docs.length - 1];
+        loadMoreBtn.style.display = snapshot.docs.length === 10 ? "inline-block" : "none";
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = "Load More";
 
         // For all fertigation logs, fetch timer logs from Mobitech API in one go (for the combined time range)
         const fertigationLogs = snapshot.docs.map((doc) => doc.data());
@@ -1740,7 +1776,9 @@ async function loadFertigationHistory() {
             if (!minStart || s < minStart) minStart = s;
             if (!maxEnd || e > maxEnd) maxEnd = e;
         });
-        // Fetch all timer logs from Mobitech API for this range
+        const fromDate = moment(minStart).subtract(1, 'day').format("YYYY-MM-DD");
+        const toDate = moment(maxEnd).format("YYYY-MM-DD");
+
         const timerResponse = await fetch(
             "https://dcon.mobitechwireless.com/v1/http/",
             {
@@ -1752,12 +1790,19 @@ async function loadFertigationHistory() {
                     action: "logs",
                     method: "timer_log",
                     serial_no: "MCON874Q000568",
-                    from: minStart.toISOString(),
-                    to: maxEnd.toISOString(),
+                    from: fromDate,
+                    to: toDate,
                 }),
             }
-        ).then((res) => res.json());
-        const timerLogs = timerResponse.log || [];
+        );
+
+        if (!timerResponse.ok) {
+            throw new Error("Failed to fetch timer logs");
+        }
+
+        const data = await timerResponse.json();
+        const timerLogs = data.log || [];
+
 
         // For each fertigation log, find overlapping timers from timerLogs (by overlap of start/end)
         const processedLogs = fertigationLogs.map((log) => {
@@ -1769,12 +1814,9 @@ async function loadFertigationHistory() {
                 const timerEnd = new Date(timer.last_sync);
                 // Overlap logic: timer starts before fertigation ends, and timer ends after fertigation starts
                 const fertEnd = endTime || new Date();
-                return (
-                    startTime <= timerEnd &&
-                    fertEnd >= timerStart &&
-                    timer.on_valves &&
-                    timer.on_valves !== "0"
-                );
+                const isOverlap = startTime <= timerEnd && fertEnd >= timerStart;
+                const hasValves = timer.on_valves && timer.on_valves !== "0";
+                return isOverlap && hasValves;
             });
             return {
                 ...log,
@@ -1783,7 +1825,7 @@ async function loadFertigationHistory() {
         });
 
         // Render the history table
-        historyTableBody.innerHTML = "";
+        if (!isLoadMore) historyTableBody.innerHTML = "";
         processedLogs.forEach((log) => {
             const row = document.createElement("tr");
             const startTime = log.startTime.toDate();
@@ -1791,13 +1833,21 @@ async function loadFertigationHistory() {
             if (log.endTime) {
                 duration = `${log.duration} min`;
             }
-            // Use timer_name and valves directly from API response
+            // Map on_valves indices to names
             const timerInfo = log.overlappingTimers
-                .map(
-                    (timer) =>
-                        `${timer.timer_name} (Valves: ${timer.on_valves})`
-                )
-                .join("<br>");
+                .map((timer) => {
+                    if (timer.on_valves) {
+                        const valveIndices = timer.on_valves.split("-").filter(v => v !== "0");
+                        if (valveIndices.length > 0) {
+                            return valveIndices
+                                .map(v => (valveDetails[v] ? valveDetails[v].valve_name : `Valve ${v}`))
+                                .join(", ");
+                        }
+                    }
+                    return null;
+                })
+                .filter(Boolean)
+                .join(", ");
             row.innerHTML = `
         <td>${startTime.toLocaleString()}</td>
         <td>${duration}</td>
@@ -1819,8 +1869,8 @@ async function loadFertigationHistory() {
 
 // --- Fertigation: Event listeners and real-time updates ---
 document.addEventListener("DOMContentLoaded", () => {
-  loadFertigationHistory();
-  listenFertigationStatus();
+    loadFertigationHistory();
+    listenFertigationStatus();
 });
 
 // --- Real-time Firestore listeners for fertigation history and valve queue ---
@@ -2051,8 +2101,8 @@ async function renderMergedPressureChart(logs, canvasId, timerName) {
 }
 
 document
-  .getElementById("valve-groups-tab")
-  .addEventListener("shown.bs.tab", populateValveGroupCards);
+    .getElementById("valve-groups-tab")
+    .addEventListener("shown.bs.tab", populateValveGroupCards);
 
 // --- Fertigation Valve Queue Management ---
 const valveGroupQueue = [];
@@ -2080,16 +2130,16 @@ function renderValveGroupQueue() {
         // Disable queue controls if add button is disabled
         const addBtn = document.getElementById("add-valve-group-btn");
         if (addBtn && addBtn.disabled) {
-          li.querySelectorAll(".queue-control-btn").forEach(b => {
-            // Don't use actual disabled state — simulate it
-            b.classList.add("disabled");
-            b.style.opacity = "0.5";
-            b.style.pointerEvents = "auto"; // keep clickable
-            b.addEventListener("click", (e) => {
-              e.preventDefault();
-              alert("🚫 You are not authorized to modify the fertigation queue.");
+            li.querySelectorAll(".queue-control-btn").forEach(b => {
+                // Don't use actual disabled state — simulate it
+                b.classList.add("disabled");
+                b.style.opacity = "0.5";
+                b.style.pointerEvents = "auto"; // keep clickable
+                b.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    alert("🚫 You are not authorized to modify the fertigation queue.");
+                });
             });
-          });
         }
     });
 }
@@ -2291,6 +2341,17 @@ document
         openValveSelectionModal();
     });
 
-// On DOMContentLoaded, only initialize the queue by loading from Firestore.
-document.addEventListener("DOMContentLoaded", () => {});
-document.addEventListener("DOMContentLoaded", () => {});
+// Pagination and filters for Fertigation History
+let lastFertDoc = null;
+
+document.getElementById("fetch-fert-history-btn")?.addEventListener("click", () => {
+    loadFertigationHistory(false);
+});
+
+document.getElementById("load-more-fert-btn")?.addEventListener("click", () => {
+    loadFertigationHistory(true);
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+    // Initial load will be triggered by tab click
+});

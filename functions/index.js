@@ -7,14 +7,13 @@ const axios = require("axios");
 const config = require("./config");
 
 initializeApp();
+const db = getFirestore();
 if (process.env.FUNCTIONS_EMULATOR === "true") {
-    const db = getFirestore();
     db.settings({
-        host: "localhost:8081",
+        host: "localhost:8082",
         ssl: false,
     });
 }
-const db = getFirestore();
 
 const form_data = new URLSearchParams({
     action: "dashboard",
@@ -28,144 +27,36 @@ const headers = {
     "user-agent": "DCON/161 CFNetwork/3826.500.131 Darwin/24.5.0",
 };
 
-// exports.fetchAndStoreIrrigationData = onSchedule(
-//     "every 5 minutes",
-//     async (event) => {
-//         try {
-//             const response = await axios.post(config.DCON_API_URL, form_data, {
-//                 headers,
-//             });
-//             const jsonData = response.data;
+// Check Fertigation Motor State from Logs
+exports.getFertigationMotorState = onRequest((req, res) => {
+    cors(req, res, async () => {
+        try {
+            const logsRef = db
+                .collection("irrigation_devices")
+                .doc(config.DEVICE_ID)
+                .collection("fertigation_logs");
 
-//             const deviceKey = Object.keys(jsonData)[0]; // Get device key (e.g., MCON874Q000568)
-//             const deviceInfo = jsonData[deviceKey];
-//             const livePacket = deviceInfo.packets.live || "";
+            // Find active fertigation (no endTime yet)
+            const activeQuery = await logsRef
+                .where("endTime", "==", null)
+                .limit(1)
+                .get();
 
-//             // Extract live packet data (pressure, etc.)
-//             const pressureInOut = livePacket.match(/(\d+\.\d+)-(\d+\.\d+)/);
-//             const pressureIn = pressureInOut ? pressureInOut[1] : null;
-//             const pressureOut = pressureInOut ? pressureInOut[2] : null;
+            const motorState = !activeQuery.empty; // true if ON, false if OFF
 
-//             // Extract current and next timers
-//             const currentTimer = deviceInfo.timers.current || {};
-//             const nextTimer = deviceInfo.timers.next || {};
-
-//             // Extract valve details
-//             const valveDetails = deviceInfo.valve_details || {};
-
-//             // Fertilizer data
-//             const fertilizer = deviceInfo.fertilizer || {};
-
-//             // Weather station data
-//             const weatherStation = deviceInfo.weather_station || {};
-
-//             // User details
-//             const users = deviceInfo.users || {};
-
-//             // Emergency shutdown status
-//             const emergencyShutdown = {
-//                 state: deviceInfo.emergency_shutdown_state,
-//                 status: deviceInfo.emergency_shutdown_status,
-//             };
-
-//             // Extract the sixth packet for voltage, current, and frequency
-//             const sixthPacket = deviceInfo.packets[6] || "";
-
-//             // Split the packet into parts based on commas
-//             const packetParts = sixthPacket.split(",");
-
-//             // Assuming that the voltage and current values are in specific positions
-//             const voltageValues = packetParts[4]?.split("-") || [];
-//             const currentValues = packetParts[6]?.split("-") || [];
-//             const frequencyValue = packetParts[10] || "";
-
-//             // Extract the voltage and current values
-//             const voltage1 = voltageValues[0] || null;
-//             const voltage2 = voltageValues[1] || null;
-//             const voltage3 = voltageValues[2] || null;
-
-//             const current1 = currentValues[0] || null;
-//             const current2 = currentValues[1] || null;
-//             const current3 = currentValues[2] || null;
-
-//             const runTimeByRemainingTime = currentTimer.run_time.split("-");
-//             const runTime = runTimeByRemainingTime[1] || null;
-//             const remainingTime = runTimeByRemainingTime[0] || null;
-
-//             const now = new Date(
-//                 new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-//             );
-//             const dateKey = now.toISOString().split("T")[0]; // "YYYY-MM-DD"
-
-//             await db
-//                 .collection("irrigation_devices")
-//                 .doc(deviceKey)
-//                 .collection(dateKey)
-//                 .add({
-//                     timestamp: now.toISOString(),
-//                     summary: {
-//                         // device_id: deviceKey,
-//                         device_info: {
-//                             server_time: deviceInfo.server_time || null,
-//                             // sim: deviceInfo.sim || null,
-//                             // time_zone: deviceInfo.time_zone || null,
-//                         },
-//                         live_data: {
-//                             pressure_in: pressureIn,
-//                             pressure_out: pressureOut,
-//                             sump_status: (() => {
-//                                 const fields = livePacket.split(",");
-//                                 const status = fields[7];
-//                                 return status === "1" ? "On" : "Off";
-//                             })(),
-//                             irrigation_status: livePacket.includes("TM")
-//                                 ? "Active"
-//                                 : "Inactive",
-//                             voltage_phase_1: voltage1,
-//                             voltage_phase_2: voltage2,
-//                             voltage_phase_3: voltage3,
-//                             current_phase_1: current1,
-//                             current_phase_2: current2,
-//                             current_phase_3: current3,
-//                             frequency: frequencyValue,
-//                         },
-//                         timers: {
-//                             current: {
-//                                 name: currentTimer.timer_name || null,
-//                                 number: currentTimer.timer_no || null,
-//                                 valves: currentTimer.on_valves || null,
-//                                 run_time: runTime,
-//                                 remaining_time: remainingTime,
-//                                 completed: currentTimer.completed === "1",
-//                                 start_time: currentTimer.time || null,
-//                             },
-//                             next: {
-//                                 name: nextTimer.timer_name || null,
-//                                 number: nextTimer.timer_no || null,
-//                                 valves: nextTimer.valves || null,
-//                                 on_time: nextTimer.on_time || null,
-//                                 on_days: nextTimer.on_days || null,
-//                             },
-//                         },
-//                         valve_details: valveDetails,
-//                         fertilizer: fertilizer,
-//                         weather_station: weatherStation,
-//                         users: users,
-//                         // emergency_shutdown: emergencyShutdown,
-//                     },
-//                 });
-
-//             console.log(
-//                 "Full JSON data and extracted summary saved successfully."
-//             );
-//         } catch (error) {
-//             console.error(
-//                 "Error fetching or storing data:",
-//                 error.response?.data || error.message
-//             );
-//         }
-//     }
-// );
+            res.json({
+                success: true,
+                motorState, // true = ON, false = OFF
+            });
+        } catch (error) {
+            console.error("Error fetching fertigation motor state:", error);
+            res.status(500).json({
+                success: false,
+                error: error.message,
+            });
+        }
+    });
+});
 
 exports.fetchIrrigationDataOnDemand = onRequest((req, res) => {
     cors(req, res, async () => {
@@ -412,7 +303,12 @@ exports.startFertigation = onRequest((req, res) => {
                     .join(",");
                 command = `V${valveIds}ON 01 00@A8`;
 
-                await axios.post(
+                console.log("Sending valve command:", {
+                    command,
+                    device_id: "12043",
+                });
+
+                const commandResponse = await axios.post(
                     "https://dcon.mobitechwireless.com/v1/command/",
                     { command, device_id: "12043" },
                     {
@@ -421,8 +317,14 @@ exports.startFertigation = onRequest((req, res) => {
                             "content-type": "application/json",
                             authorization: config.DEVICE_TOKEN,
                         },
+                        maxRedirects: 5, // Follow redirects like curl --location
                     }
                 );
+
+                console.log("Command response:", {
+                    status: commandResponse.status,
+                    data: commandResponse.data,
+                });
 
                 // Confirm update to Firestore after execution
                 await fertigationQueueRef.set(
@@ -430,20 +332,34 @@ exports.startFertigation = onRequest((req, res) => {
                     { merge: true }
                 );
 
-                await axios.post(
-                    `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
-                    {
-                        text: `✅ Fertigation Valve Chnaged to ${valveIds}. Remaining queue length: ${valveGroupQueue.length}`,
-                    }
-                );
+                try {
+                    await axios.post(
+                        `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
+                        {
+                            text: `✅ Fertigation Valve Chnaged to ${valveIds}. Remaining queue length: ${valveGroupQueue.length}`,
+                        }
+                    );
+                } catch (notifyErr) {
+                    console.error("Failed to notify Zoho Cliq (success):", notifyErr.message);
+                }
             } catch (queueErr) {
-                console.error("Error processing valve queue:", queueErr);
-                await axios.post(
-                    `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
-                    {
-                        text: `❌ Error processing valve queue: ${queueErr.message}`,
-                    }
-                );
+                console.error("Error processing valve queue:", {
+                    message: queueErr.message,
+                    status: queueErr.response?.status,
+                    statusText: queueErr.response?.statusText,
+                    data: queueErr.response?.data,
+                    headers: queueErr.response?.headers,
+                });
+                try {
+                    await axios.post(
+                        `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
+                        {
+                            text: `❌ Error processing valve queue: ${queueErr.message}${queueErr.response?.status ? ` (Status: ${queueErr.response.status})` : ""}`,
+                        }
+                    );
+                } catch (notifyErr) {
+                    console.error("Failed to notify Zoho Cliq (error):", notifyErr.message);
+                }
             }
         }
     });
@@ -509,6 +425,76 @@ exports.stopFertigation = onRequest((req, res) => {
         } catch (err) {
             console.error("Error stopping fertigation:", err);
             res.status(500).json({ success: false, error: err.message });
+        }
+    });
+});
+
+// Test Command Function
+exports.testCommand = onRequest((req, res) => {
+    cors(req, res, async () => {
+        try {
+            // Default values from curl command, can be overridden by request body
+            const command = req.body?.command || "V012,015ON 01 20@A8";
+            const deviceId = req.body?.device_id || "12043";
+            const authToken = req.body?.authorization || config.DEVICE_TOKEN;
+            const cookies = req.body?.cookies || null;
+
+            // Build headers - cookies are optional (may be session-specific)
+            const headers = {
+                accept: "*/*",
+                "content-type": "application/json",
+                authorization: authToken,
+            };
+
+            // Add cookies if provided
+            if (cookies) {
+                headers.Cookie = cookies;
+            }
+
+            console.log("Sending test command:", {
+                url: "https://dcon.mobitechwireless.com/v1/command/",
+                command,
+                device_id: deviceId,
+                hasCookies: !!cookies,
+            });
+
+            const response = await axios.post(
+                "https://dcon.mobitechwireless.com/v1/command/",
+                {
+                    command,
+                    device_id: deviceId,
+                },
+                {
+                    headers,
+                    maxRedirects: 5, // Follow redirects like curl --location
+                }
+            );
+
+            res.json({
+                success: true,
+                message: "Command sent successfully",
+                request: {
+                    command,
+                    device_id: deviceId,
+                },
+                response: response.data,
+                status: response.status,
+            });
+        } catch (error) {
+            console.error("Error sending test command:", {
+                message: error.message,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                headers: error.response?.headers,
+            });
+            res.status(error.response?.status || 500).json({
+                success: false,
+                error: error.message,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                response: error.response?.data || null,
+            });
         }
     });
 });
