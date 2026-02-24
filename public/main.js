@@ -46,7 +46,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         selectBtn.style.pointerEvents = "";
                         selectBtn.onclick = null; // remove unauthorized alert if previously set
                     }
-                    console.log(`✅ ${user.email} authorized to add fertigation queue.`);
                 } else {
                     // 🚫 Simulate disabled Add Valve Group button
                     btn.classList.add("disabled");
@@ -103,8 +102,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Updated auth state listener for fertigation permission
     auth.onAuthStateChanged(async (user) => {
         if (user) {
-            console.log("✅ Logged in as:", user.email);
-
             // Update UI elements
             userName.textContent = user.displayName;
             userAvatar.src = user.photoURL || "images/user-default.png";
@@ -122,8 +119,6 @@ document.addEventListener("DOMContentLoaded", () => {
             // Load dashboard when logged in
             fetchAllDashboardData();
         } else {
-            console.log("🚪 Logged out");
-
             userName.textContent = "Sign in with Google";
             userAvatar.src = "images/user-default.png";
 
@@ -133,8 +128,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             loginBtn.style.display = "block";
             logoutBtn.style.display = "none";
-
-            console.log("ℹ️ Dashboard remains visible even when logged out.");
 
             const btn = document.getElementById("addFertigationBtn");
             if (btn) {
@@ -209,6 +202,11 @@ document.addEventListener("DOMContentLoaded", () => {
             modal.hide();
         });
     }
+
+    // Initialize date presets for all date selectors
+    setTimeout(() => {
+        setupDatePresets();
+    }, 500);
 });
 
 // --- Load Moment.js and Chart.js adapter for time axis support ---
@@ -300,7 +298,7 @@ function drawGauge(canvasId, value, maxValue, color) {
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0.75 * Math.PI, 0.25 * Math.PI, false);
     ctx.lineWidth = 10;
-    ctx.strokeStyle = "#e0e0e0";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
     ctx.stroke();
 
     // Draw value arc
@@ -313,7 +311,7 @@ function drawGauge(canvasId, value, maxValue, color) {
 
     // Draw text
     ctx.font = "16px Arial";
-    ctx.fillStyle = "#333";
+    ctx.fillStyle = "#f0f4f8";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${value} bar`, centerX, centerY); // Display value in bar
@@ -329,7 +327,7 @@ function updatePressureDifference(inputPressure, outputPressure) {
 
     bar.style.width = `${percentage}%`;
     bar.ariaValueNow = percentage;
-    valueDisplay.textContent = `${difference.toFixed(2)} difference (bar)`;
+    valueDisplay.textContent = `${difference.toFixed(2)}`;
 
     // Set color based on intensity
     if (difference <= 0.2) {
@@ -397,17 +395,17 @@ async function populateDashboardOverview() {
                 .closest(".text-center");
             if (phaseCard) {
                 if (parseFloat(voltage) === 0) {
-                    phaseCard.style.backgroundColor = "#b0b0b0"; // greyish
-                    phaseCard.style.color = "#fff";
+                    phaseCard.style.backgroundColor = "rgba(100, 100, 120, 0.3)"; // greyish
+                    phaseCard.style.color = "#f0f4f8";
                 } else {
                     if (phase === "1") {
-                        phaseCard.style.backgroundColor = "#ff4d4f";
+                        phaseCard.style.backgroundColor = "rgba(248, 113, 113, 0.2)";
                     } else if (phase === "2") {
-                        phaseCard.style.backgroundColor = "#f7c600";
+                        phaseCard.style.backgroundColor = "rgba(251, 191, 36, 0.2)";
                     } else if (phase === "3") {
-                        phaseCard.style.backgroundColor = "#007bff";
+                        phaseCard.style.backgroundColor = "rgba(96, 165, 250, 0.2)";
                     }
-                    phaseCard.style.color = "#fff";
+                    phaseCard.style.color = "#f0f4f8";
                 }
             }
         }
@@ -418,8 +416,8 @@ async function populateDashboardOverview() {
         // Update pressure gauges
         const inputPressure = parseFloat(live.pressure_in) || 0;
         const outputPressure = parseFloat(live.pressure_out) || 0;
-        drawGauge("input-pressure-gauge", inputPressure, 6, "#007bff"); // Max value set to 6 bar
-        drawGauge("output-pressure-gauge", outputPressure, 6, "#28a745"); // Max value set to 6 bar
+        drawGauge("input-pressure-gauge", inputPressure, 6, "#34d399"); // Emerald
+        drawGauge("output-pressure-gauge", outputPressure, 6, "#fbbf24"); // Amber
 
         // Update pressure difference
         updatePressureDifference(inputPressure, outputPressure);
@@ -455,21 +453,26 @@ async function populateDashboardOverview() {
 
         // Add: Show valves list if present
         const valvesDiv = document.getElementById("dashboard-current-valves");
-        valvesDiv.innerHTML = `<strong>Valves:</strong>  ${timers.current.valves}</ul>`;
+        valvesDiv.innerHTML = `<strong>Valves:</strong> <span style="color: var(--text-primary); font-weight: 500;">${timers.current.valves}</span>`;
 
         // Enhanced visuals for Sump Status
         const motorImage = document.getElementById("motor-image");
         const motorStatusText = document.getElementById("motor-status-text");
+        const motorStatusDot = document.getElementById("motor-status-dot");
         if (live.sump_status === "On") {
             motorImage.src = "images/motor-on.png";
-            if (motorStatusText)
-                motorStatusText.innerHTML =
-                    '<span style="font-size:2rem;font-weight:bold;">On</span>';
+            if (motorStatusText) motorStatusText.textContent = "Running";
+            if (motorStatusDot) {
+                motorStatusDot.classList.remove("inactive", "warning");
+                motorStatusDot.classList.add("active");
+            }
         } else {
             motorImage.src = "images/motor-off.png";
-            if (motorStatusText)
-                motorStatusText.innerHTML =
-                    '<span style="font-size:2rem;font-weight:bold;">Off</span>';
+            if (motorStatusText) motorStatusText.textContent = "Stopped";
+            if (motorStatusDot) {
+                motorStatusDot.classList.remove("active", "warning");
+                motorStatusDot.classList.add("inactive");
+            }
         }
 
         // --- Timer image selection based on open valve(s) ---
@@ -615,8 +618,7 @@ async function populateDashboardOverview() {
 
 // --- Timer History ---
 function getTodayDate() {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
+    return new Date().toLocaleDateString('sv-SE');
 }
 
 async function populateTimerDropdown() {
@@ -753,7 +755,7 @@ async function fetchTimerHistory() {
                             // Use full-day date range for matching
                             const rangeStart = new Date(`${fromDate}T00:00:00`);
                             const rangeEnd = new Date(`${toDate}T23:59:59`);
-                            return start <= rangeEnd && end >= rangeStart;
+                            return start <= rangeEnd && end >= rangeStart && log.duration !== 0;
                         });
                     return fertigationLogs;
                 }),
@@ -922,7 +924,10 @@ async function fetchTimerHistory() {
       </tbody>
     `;
         timerHistoryContent.innerHTML = "";
-        timerHistoryContent.appendChild(table);
+        const responsiveWrapper = document.createElement("div");
+        responsiveWrapper.className = "table-responsive";
+        responsiveWrapper.appendChild(table);
+        timerHistoryContent.appendChild(responsiveWrapper);
 
         // Add sorting functionality
         let currentSort = { column: null, direction: "asc" };
@@ -1154,7 +1159,7 @@ async function graphAllPressures(logs) {
         let allPressureValues = [];
 
         // Define backwash color
-        const backwashColor = "rgba(255, 230, 0, 0.29)";
+        const backwashColor = "rgba(251, 191, 36, 0.25)";
         let shownBackwash = false;
 
         allPressureData.forEach((segment, index) => {
@@ -1166,8 +1171,8 @@ async function graphAllPressures(logs) {
                 const segmentColor = isBackwash
                     ? backwashColor
                     : `hsla(${hue}, 70%, 50%, 0.2)`;
-                const inputColor = "#007bff";
-                const outputColor = "#28a745";
+                const inputColor = "#34d399";
+                const outputColor = "#fbbf24";
 
                 // Extract pressure values
                 const inputValues = segment.data.map((entry) =>
@@ -1182,11 +1187,18 @@ async function graphAllPressures(logs) {
                     ...outputValues,
                 ];
 
-                // Add background area for this segment's time range
+                // Calculate average pressure and duration for tooltip
+                const avgInput = inputValues.length ? (inputValues.reduce((a, b) => a + b, 0) / inputValues.length).toFixed(2) : 0;
+                const avgOutput = outputValues.length ? (outputValues.reduce((a, b) => a + b, 0) / outputValues.length).toFixed(2) : 0;
+
                 const timeStart = new Date(segment.data[0].dt).getTime();
-                const timeEnd = new Date(
-                    segment.data[segment.data.length - 1].dt
-                ).getTime();
+                const timeEnd = new Date(segment.data[segment.data.length - 1].dt).getTime();
+                const startTimeStr = new Date(timeStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const endTimeStr = new Date(timeEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const durationMins = Math.round((timeEnd - timeStart) / 60000);
+
+                const segmentInputColor = `hsla(${hue}, 80%, 55%, 1)`;
+                const segmentOutputColor = `hsla(${hue}, 80%, 75%, 1)`;
 
                 const timerName = logs[index].timer_name;
                 let labelName = timerName;
@@ -1201,39 +1213,31 @@ async function graphAllPressures(logs) {
 
                 datasets.push(
                     {
-                        label:
-                            isBackwash && !shownBackwash
-                                ? "Backwash (Input)"
-                                : labelName
-                                    ? `${labelName} (Input)`
-                                    : "",
+                        label: "Input Pressure",
                         data: segment.data.map((entry) => ({
                             x: entry.dt,
                             y: parseFloat(entry.pressure.split("-")[0]),
                         })),
-                        borderColor: inputColor,
+                        borderColor: isBackwash ? inputColor : segmentInputColor,
                         backgroundColor: segmentColor,
                         fill: true,
                         segment: segment.timestamp,
                         pointRadius: 2,
+                        customInfo: { timerName: timerName, start: startTimeStr, end: endTimeStr, duration: durationMins, avg: avgInput }
                     },
                     {
-                        label:
-                            isBackwash && !shownBackwash
-                                ? "Backwash (Output)"
-                                : labelName
-                                    ? `${labelName} (Output)`
-                                    : "",
+                        label: "Output Pressure",
                         data: segment.data.map((entry) => ({
                             x: entry.dt,
                             y: parseFloat(entry.pressure.split("-")[1]),
                         })),
-                        borderColor: outputColor,
+                        borderColor: isBackwash ? outputColor : segmentOutputColor,
                         backgroundColor: "transparent",
                         fill: false,
                         segment: segment.timestamp,
                         borderDash: [5, 5],
                         pointRadius: 2,
+                        customInfo: { timerName: timerName, start: startTimeStr, end: endTimeStr, duration: durationMins, avg: avgOutput }
                     }
                 );
             }
@@ -1248,29 +1252,98 @@ async function graphAllPressures(logs) {
         );
         const maxPressure = Math.ceil(Math.max(...allPressureValues) + 0.5);
 
-        // Create chart
         chartContainer.innerHTML = `
-      <div class="text-center mb-3">
-        <small class="text-muted">Note: Solid lines represent input pressure, dashed lines represent output pressure</small>
+      <div class="text-center mb-4">
+        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Solid lines: Input Pressure | Dashed lines: Output Pressure</small>
       </div>
-      <div style="height: 500px;">
+      <div style="height: 480px;">
         <canvas id="pressure-chart"></canvas>
       </div>
     `;
         const ctx = document.getElementById("pressure-chart").getContext("2d");
+        const instanceInfoPlugin = {
+            id: 'instanceInfoPlugin',
+            afterDraw: (chart) => {
+                const { ctx, chartArea, scales } = chart;
+                ctx.save();
+                chart.data.datasets.forEach((dataset) => {
+                    if (dataset.label === "Input Pressure" && dataset.customInfo) {
+                        const info = dataset.customInfo;
+                        const startX = scales.x.getPixelForValue(dataset.data[0].x);
+                        const endX = scales.x.getPixelForValue(dataset.data[dataset.data.length - 1].x);
+                        const midX = (startX + endX) / 2;
+
+                        ctx.beginPath();
+                        ctx.setLineDash([5, 5]);
+                        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                        ctx.moveTo(startX, chartArea.top);
+                        ctx.lineTo(startX, chartArea.bottom + 10);
+                        ctx.stroke();
+
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'top';
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = dataset.borderColor;
+                        ctx.font = '600 11px Inter, sans-serif';
+                        ctx.fillText(`${info.start} - ${info.end}`, midX, chartArea.bottom + 15);
+                        ctx.fillStyle = '#8899aa';
+                        ctx.font = '500 10px Inter, sans-serif';
+                        ctx.fillText(`${info.avg} bar avg`, midX, chartArea.bottom + 30);
+                    }
+                });
+                ctx.restore();
+            }
+        };
+
         new Chart(ctx, {
             type: "line",
+            plugins: [instanceInfoPlugin],
             data: {
                 datasets: datasets,
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        bottom: 45
+                    }
+                },
                 plugins: {
-                    legend: { position: "top" },
+                    legend: {
+                        position: "top",
+                        labels: {
+                            color: "#f0f4f8",
+                            usePointStyle: true,
+                            boxWidth: 8,
+                            filter: function (item, chart) {
+                                return item.datasetIndex === 0 || item.datasetIndex === 1;
+                            }
+                        }
+                    },
                     tooltip: {
                         mode: "index",
                         intersect: false,
+                        backgroundColor: 'rgba(10, 18, 32, 0.92)',
+                        titleColor: '#f0f4f8',
+                        bodyColor: '#f0f4f8',
+                        borderColor: 'rgba(52, 211, 153, 0.15)',
+                        borderWidth: 1,
+                        callbacks: {
+                            afterBody: function (context) {
+                                if (context && context.length > 0) {
+                                    const ds = context[0].dataset;
+                                    if (ds.customInfo) {
+                                        return [
+                                            '',
+                                            `Time Range: ${ds.customInfo.start} - ${ds.customInfo.end} (${ds.customInfo.duration}m)`,
+                                            `Avg Pressure: ${ds.customInfo.avg} bar`
+                                        ];
+                                    }
+                                }
+                                return [];
+                            }
+                        }
                     },
                 },
                 interaction: {
@@ -1280,20 +1353,23 @@ async function graphAllPressures(logs) {
                 },
                 scales: {
                     x: {
-                        title: { display: true, text: "Timestamp" },
                         grid: {
-                            color: "rgba(0,0,0,0.1)",
+                            color: "rgba(255,255,255,0.04)",
                         },
+                        ticks: {
+                            display: false // Hide cluttered timestamps
+                        }
                     },
                     y: {
-                        title: { display: true, text: "Pressure (bar)" },
+                        title: { display: true, text: "Pressure (bar)", color: "#8899aa" },
                         min: minPressure,
                         max: maxPressure,
                         ticks: {
                             stepSize: 0.5,
+                            color: "#8899aa"
                         },
                         grid: {
-                            color: "rgba(0,0,0,0.1)",
+                            color: "rgba(255,255,255,0.04)",
                         },
                     },
                 },
@@ -1352,13 +1428,13 @@ async function fetchPressureData(from, to) {
                     {
                         label: "Input Pressure (bar)",
                         data: inputPressure,
-                        borderColor: "#007bff",
+                        borderColor: "#34d399",
                         fill: false,
                     },
                     {
                         label: "Output Pressure (bar)",
                         data: outputPressure,
-                        borderColor: "#28a745",
+                        borderColor: "#fbbf24",
                         fill: false,
                     },
                 ],
@@ -1548,13 +1624,15 @@ async function runAiAnomalyTest() {
     }
 }
 
+function getBaseUrl() {
+    return "/api";
+}
+
 // --- Dashboard Data Fetch: Triggers Cloud Function before loading ---
 async function fetchAllDashboardData() {
-    // Replace <REGION> and <PROJECT_ID> with your actual values
-    const cloudFunctionUrl = "https://fetchirrigationdataondemand-m2hab33w6q-uc.a.run.app";
+    const cloudFunctionUrl = `${getBaseUrl()}/fetchIrrigationDataOnDemand`;
     try {
         await fetch(cloudFunctionUrl);
-        console.log("Triggered on-demand data fetch.");
     } catch (err) {
         console.error("Failed to trigger on-demand data fetch:", err);
     }
@@ -1564,6 +1642,7 @@ async function fetchAllDashboardData() {
         populateDashboardOverview(),
         fetchTimerHistory(),
         updateAiInsights(),
+        generateSmartRecommendation(),
     ]);
 }
 
@@ -1580,6 +1659,11 @@ document.addEventListener("DOMContentLoaded", () => {
         .getElementById("analyze-pressure-btn")
         .addEventListener("click", () => {
             const timerName = document.getElementById("pressure-timer-dropdown").value;
+            const fromDate = document.getElementById("pressure-from-date").value || getTodayDate();
+            const toDate = document.getElementById("pressure-to-date").value || getTodayDate();
+
+            const includeBackwash = document.getElementById("include-backwash-toggle").checked;
+
             if (timerName) {
                 fetch("https://dcon.mobitechwireless.com/v1/http/", {
                     method: "POST",
@@ -1590,15 +1674,50 @@ document.addEventListener("DOMContentLoaded", () => {
                         action: "logs",
                         method: "timer_log",
                         serial_no: "MCON874Q000568",
-                        from: getTodayDate(),
-                        to: getTodayDate(),
-                        timer_name: timerName,
+                        from: fromDate,
+                        to: toDate,
+                        // timer_name: timerName, // Omit to fetch all logs for the range
                     }),
                 })
                     .then((response) => response.json())
                     .then((data) => {
                         if (data.log && data.log.length > 0) {
-                            graphAllPressures(data.log);
+                            const mainLogs = data.log.filter(log => log.timer_name === timerName)
+                                .sort((a, b) => new Date(a.dt) - new Date(b.dt));
+
+                            let filteredLogs = [...mainLogs];
+
+                            if (includeBackwash && mainLogs.length >= 2) {
+                                const backwashLogs = data.log.filter(log =>
+                                    log.timer_name.toLowerCase().includes("backwash")
+                                );
+
+                                const firstMainStart = new Date(mainLogs[0].dt);
+                                const lastMainEnd = new Date(mainLogs[mainLogs.length - 1].last_sync || mainLogs[mainLogs.length - 1].dt);
+
+                                const sandwichedBackwash = backwashLogs.filter(bw => {
+                                    const bwStart = new Date(bw.dt);
+                                    const bwEnd = new Date(bw.last_sync || bw.dt);
+
+                                    // Must be after the first main log started and before the last one ended
+                                    // AND must specifically be between two instances (not just inside the total range)
+                                    // But the user's logic "in between two of our main instances" is usually covered by
+                                    // checking if it's within the [firstStart, lastEnd] range of the main timer session.
+                                    return bwStart > firstMainStart && bwEnd < lastMainEnd;
+                                });
+
+                                filteredLogs = [...filteredLogs, ...sandwichedBackwash];
+                            }
+
+                            if (filteredLogs.length > 0) {
+                                // Sort by dt to ensure chronological graph segments
+                                filteredLogs.sort((a, b) => new Date(a.dt) - new Date(b.dt));
+                                graphAllPressures(filteredLogs);
+                            } else {
+                                document.getElementById("pressure-chart-container").innerHTML = '<p class="text-muted text-center mt-5 pt-5"><i class="fas fa-exclamation-circle fs-1 mb-3 opacity-50"></i><br>No pressure data available for the selected parameters.</p>';
+                            }
+                        } else {
+                            document.getElementById("pressure-chart-container").innerHTML = '<p class="text-muted text-center mt-5 pt-5"><i class="fas fa-exclamation-circle fs-1 mb-3 opacity-50"></i><br>No runtime data found for the selected period.</p>';
                         }
                     })
                     .catch((error) =>
@@ -1631,7 +1750,7 @@ function updateFertigationStatus(isActive, startTime, notes) {
     const statusCard = document.getElementById("fertigation-status-card");
 
     if (isActive) {
-        statusDot.style.backgroundColor = "#28a745";
+        statusDot.style.backgroundColor = "#34d399";
         statusText.textContent = "Active";
         statusCard.classList.add("border-success");
 
@@ -1650,7 +1769,7 @@ function updateFertigationStatus(isActive, startTime, notes) {
         // Store timer ID as a data attribute to clear it later
         timerDisplay.dataset.timerId = timerId;
     } else {
-        statusDot.style.backgroundColor = "#dc3545";
+        statusDot.style.backgroundColor = "#f87171";
         statusText.textContent = "Inactive";
         statusCard.classList.remove("border-success");
         timerDisplay.textContent = "";
@@ -1695,6 +1814,129 @@ function listenFertigationStatus() {
             document.getElementById("stop-fertigation").disabled = true;
             document.getElementById("fertigation-notes").disabled = false;
             document.getElementById("fertigation-form").reset();
+        }
+    });
+}
+
+// Global variable for the Fertigation Duration Chart
+let fertigationChart = null;
+
+function updateFertigationChart(logs) {
+    const canvas = document.getElementById("fertigation-duration-chart");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+
+    // Only process logs that have a duration > 0 (completed cycles)
+    const completedLogs = logs.filter(log => log.duration !== undefined && log.duration !== null && log.duration > 0).reverse();
+
+    // Group logs by day
+    const groupedByDay = {};
+    completedLogs.forEach(log => {
+        const dateStr = log.startTime.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        if (!groupedByDay[dateStr]) {
+            groupedByDay[dateStr] = [];
+        }
+        groupedByDay[dateStr].push(log);
+    });
+
+    const labels = Object.keys(groupedByDay);
+
+    // Find the maximum number of fertigation events in a single day
+    let maxEvents = 0;
+    labels.forEach(date => {
+        if (groupedByDay[date].length > maxEvents) {
+            maxEvents = groupedByDay[date].length;
+        }
+    });
+
+    const datasets = [];
+    const colorPalette = [
+        'rgba(52, 211, 153, 0.7)', // Emerald
+        'rgba(45, 212, 191, 0.7)', // Teal
+        'rgba(6, 182, 212, 0.7)',  // Cyan
+        'rgba(59, 130, 246, 0.7)', // Blue
+        'rgba(139, 92, 246, 0.7)', // Purple
+        'rgba(245, 158, 11, 0.7)'  // Amber
+    ];
+
+    for (let i = 0; i < maxEvents; i++) {
+        const data = labels.map(date => {
+            const logsForDay = groupedByDay[date];
+            return logsForDay[i] ? logsForDay[i].duration : 0;
+        });
+
+        // Collect specific start times for tooltips
+        const times = labels.map(date => {
+            const logsForDay = groupedByDay[date];
+            return logsForDay[i] ? logsForDay[i].startTime.toDate().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : "";
+        });
+
+        datasets.push({
+            label: `Tank ${i + 1}`,
+            data: data,
+            customTimes: times, // Store times for tooltip
+            backgroundColor: colorPalette[i % colorPalette.length],
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            borderWidth: 1,
+            borderRadius: 4
+        });
+    }
+
+    if (fertigationChart) {
+        fertigationChart.destroy();
+    }
+
+    fertigationChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: "#8899aa", usePointStyle: true, boxWidth: 8 }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 18, 32, 0.92)',
+                    titleColor: '#f0f4f8',
+                    bodyColor: '#f0f4f8',
+                    borderColor: 'rgba(52, 211, 153, 0.15)',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: function (context) {
+                            const duration = context.parsed.y;
+                            if (duration === 0) return null; // Don't show empty segments
+                            const time = context.dataset.customTimes[context.dataIndex];
+                            return ` ${context.dataset.label} (${time}): ${duration} mins`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Total Minutes',
+                        color: '#8899aa'
+                    },
+                    grid: { color: "rgba(255,255,255,0.04)" },
+                    ticks: { color: "#8899aa" }
+                },
+                x: {
+                    stacked: true,
+                    ticks: {
+                        color: '#8899aa'
+                    },
+                    grid: { display: false }
+                }
+            }
         }
     });
 }
@@ -1766,7 +2008,7 @@ async function loadFertigationHistory(isLoadMore = false) {
         loadMoreBtn.textContent = "Load More";
 
         // For all fertigation logs, fetch timer logs from Mobitech API in one go (for the combined time range)
-        const fertigationLogs = snapshot.docs.map((doc) => doc.data());
+        const fertigationLogs = snapshot.docs.map((doc) => doc.data()).filter(log => log.duration !== 0);
         // Find overall min start and max end
         let minStart = null;
         let maxEnd = null;
@@ -1808,10 +2050,15 @@ async function loadFertigationHistory(isLoadMore = false) {
         const processedLogs = fertigationLogs.map((log) => {
             const startTime = log.startTime.toDate();
             const endTime = log.endTime?.toDate();
+            const parseIST = (dateStr) => {
+                if (!dateStr) return new Date();
+                return new Date(dateStr.replace(" ", "T") + "+05:30");
+            };
+
             // Filter timer logs that overlap
             const overlappingTimers = timerLogs.filter((timer) => {
-                const timerStart = new Date(timer.dt);
-                const timerEnd = new Date(timer.last_sync);
+                const timerStart = parseIST(timer.dt);
+                const timerEnd = parseIST(timer.last_sync);
                 // Overlap logic: timer starts before fertigation ends, and timer ends after fertigation starts
                 const fertEnd = endTime || new Date();
                 const isOverlap = startTime <= timerEnd && fertEnd >= timerStart;
@@ -1856,6 +2103,13 @@ async function loadFertigationHistory(isLoadMore = false) {
       `;
             historyTableBody.appendChild(row);
         });
+
+        if (!isLoadMore) {
+            // Note: Chart updating is now decoupled and handled by loadFertigationChartData()
+        } else {
+            // Note: Chart updating is now decoupled and handled by loadFertigationChartData()
+        }
+
     } catch (error) {
         console.error("Error loading fertigation history:", error);
         historyTableBody.innerHTML = `
@@ -1869,6 +2123,29 @@ async function loadFertigationHistory(isLoadMore = false) {
 
 // --- Fertigation: Event listeners and real-time updates ---
 document.addEventListener("DOMContentLoaded", () => {
+    // Default chart dates to 1 week initially
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - 7);
+
+    const fromDateInput = document.getElementById("fert-chart-from-date");
+    const toDateInput = document.getElementById("fert-chart-to-date");
+
+    if (fromDateInput && toDateInput) {
+        fromDateInput.value = fromDate.toISOString().split("T")[0];
+        toDateInput.value = toDate.toISOString().split("T")[0];
+        // Fetch chart data specifically
+        loadFertigationChartData();
+    }
+
+    // Attach listener for update button
+    const updateBtn = document.getElementById("update-fert-charts-btn");
+    if (updateBtn) {
+        updateBtn.addEventListener("click", () => {
+            loadFertigationChartData();
+        });
+    }
+
     loadFertigationHistory();
     listenFertigationStatus();
 });
@@ -1879,6 +2156,7 @@ db.collection("irrigation_devices")
     .collection("fertigation_logs")
     .onSnapshot(() => {
         loadFertigationHistory();
+        loadFertigationChartData(); // Added chart refresh on snapshot
     });
 
 db.collection("irrigation_devices")
@@ -1889,220 +2167,101 @@ db.collection("irrigation_devices")
         loadValveQueueFromFirestore();
     });
 
-// --- Valve Groups Tab Support ---
-async function populateValveGroupCards() {
-    const valveCardsContainer = document.getElementById("valve-group-cards");
-    valveCardsContainer.innerHTML =
-        "<p class='text-muted text-center'>Loading merged timer pressure history...</p>";
+
+// --- New Chart Data Loading Logic ---
+async function loadFertigationChartData() {
+    const fromVal = document.getElementById("fert-chart-from-date").value;
+    const toVal = document.getElementById("fert-chart-to-date").value;
+
+    if (!fromVal || !toVal) return;
 
     try {
-        const timerHistoryTable = document.querySelector(
-            "#timer-history-content table tbody"
-        );
-        if (!timerHistoryTable) {
-            valveCardsContainer.innerHTML =
-                "<p class='text-center text-muted'>No timer history available.</p>";
+        let query = db
+            .collection("irrigation_devices")
+            .doc("MCON874Q000568")
+            .collection("fertigation_logs")
+            .orderBy("startTime", "desc");
+
+        query = query.where("startTime", ">=", new Date(fromVal));
+        const toDate = new Date(toVal);
+        toDate.setHours(23, 59, 59, 999);
+        query = query.where("startTime", "<=", toDate);
+
+        const snapshot = await query.get();
+        const fertigationLogs = snapshot.docs.map(doc => doc.data()).filter(log => log.duration !== 0);
+
+        if (fertigationLogs.length === 0) {
+            updateFertigationChart([]);
+            updateFertigationValveStatsChart([], {});
             return;
         }
 
-        valveCardsContainer.innerHTML = "";
+        // Fetch Valve Details
+        const latestSnapshot = await db
+            .collection("irrigation_devices")
+            .doc("MCON874Q000568")
+            .collection(getTodayDate())
+            .orderBy("timestamp", "desc")
+            .limit(1)
+            .get();
 
-        const rows = Array.from(timerHistoryTable.querySelectorAll("tr"));
-        if (rows.length === 0) {
-            valveCardsContainer.innerHTML =
-                "<p class='text-center text-muted'>No timer history available.</p>";
-            return;
-        }
+        const valveDetails = !latestSnapshot.empty ? latestSnapshot.docs[0].data().summary?.valve_details || {} : {};
 
-        // Group rows by timer name
-        const groupedLogs = {};
-        rows.forEach((row) => {
-            const timerName = row.cells[2]?.textContent.trim();
-            const startTime = row.cells[0]?.textContent.trim();
-            const endTime = row.cells[1]?.textContent.trim();
-            if (!groupedLogs[timerName]) groupedLogs[timerName] = [];
-            groupedLogs[timerName].push({ startTime, endTime });
+        // Fetch timer logs
+        let minStart = null;
+        let maxEnd = null;
+        fertigationLogs.forEach((log) => {
+            const s = log.startTime.toDate();
+            const e = log.endTime?.toDate() || new Date();
+            if (!minStart || s < minStart) minStart = s;
+            if (!maxEnd || e > maxEnd) maxEnd = e;
         });
 
-        let groupIndex = 0;
-        for (const [timerName, logs] of Object.entries(groupedLogs)) {
-            const canvasId = `timer-pressure-${groupIndex}`;
-            const card = document.createElement("div");
-            card.className = "col-12 mb-4";
-            card.innerHTML = `
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">${timerName}</h5>
-            <canvas id="${canvasId}" width="800" height="300"></canvas>
-          </div>
-        </div>
-      `;
-            valveCardsContainer.appendChild(card);
+        const timerFromDate = moment(minStart).subtract(1, 'day').format("YYYY-MM-DD");
+        const timerToDate = moment(maxEnd).format("YYYY-MM-DD");
 
-            await renderMergedPressureChart(logs, canvasId, timerName);
-            groupIndex++;
-        }
-    } catch (error) {
-        console.error("Failed to load merged timer pressure history:", error);
-        valveCardsContainer.innerHTML =
-            "<p class='text-danger text-center'>Error loading merged timer pressure history.</p>";
-    }
-}
-
-// --- Render merged pressure chart for valve groups ---
-async function renderMergedPressureChart(logs, canvasId, timerName) {
-    try {
-        const datasets = [];
-        let allPressureValues = [];
-
-        let globalFirstTime = null;
-        let globalLastTime = null;
-        const processedLogs = [];
-
-        for (let i = 0; i < logs.length; i++) {
-            const { startTime, endTime } = logs[i];
-            const response = await fetch(
-                `https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(
-                    startTime
-                )}&to=${encodeURIComponent(endTime)}&product=DCON`
-            );
-            if (!response.ok) throw new Error("Failed to fetch pressure data");
-
-            const data = await response.json();
-            let pressureData = data.data || [];
-            if (pressureData.length === 0) continue;
-
-            // Truncate leading and trailing empty data points
-            const firstValidIndex = pressureData.findIndex(
-                (entry) => entry.pressure && entry.pressure.includes("-")
-            );
-            const lastValidIndex =
-                pressureData.length -
-                1 -
-                [...pressureData]
-                    .reverse()
-                    .findIndex(
-                        (entry) =>
-                            entry.pressure && entry.pressure.includes("-")
-                    );
-            pressureData = pressureData.slice(
-                firstValidIndex,
-                lastValidIndex + 1
-            );
-
-            if (pressureData.length === 0) continue;
-
-            const firstTime = new Date(pressureData[0].dt).getTime();
-            const lastTime = new Date(
-                pressureData[pressureData.length - 1].dt
-            ).getTime();
-            if (globalFirstTime === null || firstTime < globalFirstTime)
-                globalFirstTime = firstTime;
-            if (globalLastTime === null || lastTime > globalLastTime)
-                globalLastTime = lastTime;
-
-            processedLogs.push({ pressureData, index: i });
-        }
-
-        if (processedLogs.length === 0) return;
-
-        for (const log of processedLogs) {
-            const pressureData = log.pressureData;
-            const i = log.index;
-
-            const hue = ((i * 360) / processedLogs.length) % 360;
-            const inputColor = `hsla(${hue}, 70%, 50%, 1)`;
-            const outputColor = `hsla(${(hue + 180) % 360}, 70%, 50%, 1)`;
-
-            const inputValues = pressureData.map((entry) =>
-                parseFloat(entry.pressure.split("-")[0])
-            );
-            const outputValues = pressureData.map((entry) =>
-                parseFloat(entry.pressure.split("-")[1])
-            );
-            allPressureValues = [
-                ...allPressureValues,
-                ...inputValues,
-                ...outputValues,
-            ];
-
-            datasets.push(
-                {
-                    label: `${timerName} (Input segment ${i + 1})`,
-                    data: pressureData.map((entry) => ({
-                        x: entry.dt,
-                        y: parseFloat(entry.pressure.split("-")[0]),
-                    })),
-                    borderColor: inputColor,
-                    fill: false,
-                    pointRadius: 2,
-                },
-                {
-                    label: `${timerName} (Output segment ${i + 1})`,
-                    data: pressureData.map((entry) => ({
-                        x: entry.dt,
-                        y: parseFloat(entry.pressure.split("-")[1]),
-                    })),
-                    borderColor: outputColor,
-                    fill: false,
-                    borderDash: [5, 5],
-                    pointRadius: 2,
-                }
-            );
-        }
-
-        const minPressure = Math.max(
-            0,
-            Math.floor(
-                Math.min(...allPressureValues.filter((p) => p > 0)) - 0.5
-            )
+        const timerResponse = await fetch(
+            "https://dcon.mobitechwireless.com/v1/http/",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    action: "logs",
+                    method: "timer_log",
+                    serial_no: "MCON874Q000568",
+                    from: timerFromDate,
+                    to: timerToDate,
+                }),
+            }
         );
-        const maxPressure = Math.ceil(Math.max(...allPressureValues) + 0.5);
 
-        const canvas = document.getElementById(canvasId);
-        canvas.style.height = "300px";
-        canvas.style.maxHeight = "300px";
-        const ctx = canvas.getContext("2d");
+        if (!timerResponse.ok) throw new Error("Failed to fetch timer logs for charts");
 
-        new Chart(ctx, {
-            type: "line",
-            data: { datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: "top" } },
-                interaction: { mode: "nearest", axis: "x", intersect: false },
-                scales: {
-                    x: {
-                        type: "time",
-                        time: {
-                            parser: true,
-                            tooltipFormat: "ll HH:mm",
-                        },
-                        min: globalFirstTime,
-                        max: globalLastTime,
-                        title: { display: true, text: "Timestamp" },
-                    },
-                    y: {
-                        title: { display: true, text: "Pressure (bar)" },
-                        min: minPressure,
-                        max: maxPressure,
-                        ticks: { stepSize: 0.5 },
-                    },
-                },
-            },
+        const timerData = await timerResponse.json();
+        const timerLogs = timerData.log || [];
+
+        // Correlate
+        const processedLogs = fertigationLogs.map((log) => {
+            const startTime = log.startTime.toDate();
+            const endTime = log.endTime?.toDate();
+            const overlappingTimers = timerLogs.filter((timer) => {
+                const timerStart = new Date(timer.dt);
+                const timerEnd = new Date(timer.last_sync);
+                const fertEnd = endTime || new Date();
+                const isOverlap = startTime <= timerEnd && fertEnd >= timerStart;
+                const hasValves = timer.on_valves && timer.on_valves !== "0";
+                return isOverlap && hasValves;
+            });
+            return { ...log, overlappingTimers };
         });
+
+        updateFertigationChart(processedLogs);
+        updateFertigationValveStatsChart(processedLogs, valveDetails);
+
     } catch (error) {
-        console.error(
-            `Error rendering merged pressure chart for ${timerName}:`,
-            error
-        );
+        console.error("Error loading fertigation chart data:", error);
     }
 }
-
-document
-    .getElementById("valve-groups-tab")
-    .addEventListener("shown.bs.tab", populateValveGroupCards);
 
 // --- Fertigation Valve Queue Management ---
 const valveGroupQueue = [];
@@ -2110,7 +2269,9 @@ const valveGroupQueue = [];
 // Render the fertigation valve group queue UI.
 function renderValveGroupQueue() {
     const list = document.getElementById("valve-group-queue-list");
+    if (!list) return;
     list.innerHTML = "";
+
     valveGroupQueue.forEach((group, index) => {
         const valveNames = Array.isArray(group.valves)
             ? group.valves.map((v) => v.name).join(", ")
@@ -2121,9 +2282,9 @@ function renderValveGroupQueue() {
         li.innerHTML = `
       <span>${valveNames}</span>
         <div>
-        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveUpInValveGroupQueue(${index})">⬆️</button>
-        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveDownInValveGroupQueue(${index})">⬇️</button>
-        <button class="btn btn-sm btn-outline-danger queue-control-btn" onclick="removeFromValveGroupQueue(${index})">❌</button>
+        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveUpInValveGroupQueue(${index})"><i class="fa-solid fa-arrow-up"></i></button>
+        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveDownInValveGroupQueue(${index})"><i class="fa-solid fa-arrow-down"></i></button>
+        <button class="btn btn-sm btn-outline-danger queue-control-btn" onclick="removeFromValveGroupQueue(${index})"><i class="fa-solid fa-xmark"></i></button>
         </div>
     `;
         list.appendChild(li);
@@ -2131,10 +2292,9 @@ function renderValveGroupQueue() {
         const addBtn = document.getElementById("add-valve-group-btn");
         if (addBtn && addBtn.disabled) {
             li.querySelectorAll(".queue-control-btn").forEach(b => {
-                // Don't use actual disabled state — simulate it
                 b.classList.add("disabled");
                 b.style.opacity = "0.5";
-                b.style.pointerEvents = "auto"; // keep clickable
+                b.style.pointerEvents = "auto";
                 b.addEventListener("click", (e) => {
                     e.preventDefault();
                     alert("🚫 You are not authorized to modify the fertigation queue.");
@@ -2142,6 +2302,112 @@ function renderValveGroupQueue() {
             });
         }
     });
+
+    // Faded Recommendation Display (always shown)
+    const recSection = document.createElement("div");
+    recSection.className = "mt-3";
+
+    // Header row with label and reload button
+    const recHeader = document.createElement("div");
+    recHeader.className = "d-flex justify-content-between align-items-center mb-1 px-1";
+    recHeader.innerHTML = `
+        <span class="extra-small text-muted" style="letter-spacing:0.05em; text-transform:uppercase;">AI Suggestions</span>
+        <button id="reload-rec-btn" class="btn btn-sm btn-link p-0" style="color: var(--accent-teal); font-size:0.75rem;" title="Refresh recommendations">
+            <i class="fas fa-rotate-right"></i>
+        </button>
+    `;
+    recSection.appendChild(recHeader);
+
+    if (currentSmartRecommendation && Array.isArray(currentSmartRecommendation) && currentSmartRecommendation.length > 0) {
+        // Filter out any recommendations already in the queue
+        const availableRecs = currentSmartRecommendation.filter(rec => {
+            const inQueue = valveGroupQueue.some(q =>
+                q.valves.length === rec.valves.length &&
+                q.valves.every(qv => rec.valves.some(gv => gv.id === qv.id))
+            );
+            return !inQueue;
+        });
+
+        if (availableRecs.length > 0) {
+            // Render up to 5 available recommendations
+            availableRecs.slice(0, 5).forEach(rec => {
+                const recItem = document.createElement("li");
+                recItem.className = "list-group-item d-flex justify-content-between align-items-center animate__animated animate__fadeIn mb-1";
+                recItem.style.border = "1px dashed rgba(52, 211, 153, 0.3)";
+                recItem.style.background = "rgba(52, 211, 153, 0.05)";
+                recItem.style.opacity = "0.7";
+                recItem.style.cursor = "pointer";
+                recItem.title = "Click to add this recommendation to the queue";
+
+                const valveNames = rec.valves.map(v => v.name).join(", ");
+                recItem.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-magic me-3" style="color: var(--accent-teal);"></i>
+                        <div>
+                            <div class="small fw-bold text-white">Suggested: ${rec.name}</div>
+                            <div class="extra-small text-muted">${valveNames}</div>
+                            <div class="extra-small text-muted italic" style="font-size: 0.65rem; opacity: 0.8;">${rec.reason}</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-link p-0" style="color: var(--accent-teal);" title="Add to queue">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>`;
+
+                recItem.onclick = (e) => {
+                    if (e.target.closest("#reload-rec-btn")) return;
+                    addToValveQueue(rec.valves);
+                    // Remove this specific recommendation from the list
+                    currentSmartRecommendation = currentSmartRecommendation.filter(r => r.id !== rec.id);
+                    renderValveGroupQueue();
+                };
+
+                recSection.appendChild(recItem);
+            });
+        } else {
+            // If all 5 recommendations are already queued, try to get more
+            const loadingItem = document.createElement("li");
+            loadingItem.className = "list-group-item d-flex justify-content-between align-items-center animate__animated animate__fadeIn mt-1";
+            loadingItem.style.border = "1px dashed rgba(52, 211, 153, 0.3)";
+            loadingItem.style.background = "rgba(52, 211, 153, 0.05)";
+            loadingItem.style.opacity = "0.35";
+            loadingItem.innerHTML = `
+                 <div class="d-flex align-items-center">
+                     <i class="fas fa-magic me-3" style="color: var(--accent-teal);"></i>
+                     <div class="small text-muted">Loading more suggestions…</div>
+                 </div>`;
+            recSection.appendChild(loadingItem);
+            // Use setTimeout to avoid infinite loops if generate is slow or fails
+            setTimeout(generateSmartRecommendation, 1000);
+        }
+    } else {
+        // No recommendations yet or error — show a loading/empty state
+        const emptyItem = document.createElement("li");
+        emptyItem.className = "list-group-item d-flex justify-content-between align-items-center animate__animated animate__fadeIn mt-1";
+        emptyItem.style.border = "1px dashed rgba(52, 211, 153, 0.3)";
+        emptyItem.style.background = "rgba(52, 211, 153, 0.05)";
+        emptyItem.style.opacity = "0.35";
+        emptyItem.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-magic me-3" style="color: var(--accent-teal);"></i>
+                <div class="small text-muted">Loading suggestions…</div>
+            </div>`;
+        recSection.appendChild(emptyItem);
+    }
+
+    list.appendChild(recSection);
+
+    // Wire up the reload button
+    const reloadBtn = document.getElementById("reload-rec-btn");
+    if (reloadBtn) {
+        reloadBtn.onclick = async (e) => {
+            e.stopPropagation();
+            reloadBtn.innerHTML = `<i class="fas fa-rotate-right fa-spin"></i>`;
+            reloadBtn.disabled = true;
+            await generateSmartRecommendation();
+            reloadBtn.innerHTML = `<i class="fas fa-rotate-right"></i>`;
+            reloadBtn.disabled = false;
+        };
+    }
 }
 
 // Load the fertigation valve queue from Firestore and render.
@@ -2177,7 +2443,6 @@ async function saveValveQueueToFirestore() {
             .collection("fertigation_queue")
             .doc("current_queue");
         await userQueueRef.set({ queue: valveGroupQueue }, { merge: true });
-        console.log("✅ Valve queue saved to Firestore");
     } catch (error) {
         console.error("❌ Error storing valve queue:", error);
     }
@@ -2187,10 +2452,21 @@ async function saveValveQueueToFirestore() {
  * Add valves to the fertigation valve queue and save.
  * @param {Array} valves - Array of valve objects {id, name}
  */
-async function addToValveQueue(valves) {
+async function addToValveQueue(valves, isAuto = false) {
     valveGroupQueue.push({ valves });
     renderValveGroupQueue();
     await saveValveQueueToFirestore();
+
+    if (isAuto) {
+        const valveNames = valves.map(v => v.name).join(", ");
+        const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, timeStyle: "short" });
+        notifyZohoCliq([
+            `📥 *Queue Updated (Auto-Scheduler)*`,
+            `🪴 Added: ${valveNames}`,
+            `📋 Queue length: ${valveGroupQueue.length}`,
+            `⏰ Time: ${now}`,
+        ].join("\n"));
+    }
 }
 
 /**
@@ -2234,104 +2510,83 @@ function moveDownInValveGroupQueue(index) {
 }
 
 /**
- * Modal-based valve selection for fertigation valve queue.
- * On confirm, adds selected valves to the queue and saves.
+ * Modal-based predefined valve group selection for fertigation queue.
+ * On confirm, adds selected group to the queue and saves.
  */
 async function openValveSelectionModal() {
-    // Fetch latest valve details from Firestore
-    let valveDetails = {};
-    try {
-        const snapshot = await db
-            .collection("irrigation_devices")
-            .doc("MCON874Q000568")
-            .collection(new Date().toISOString().split("T")[0])
-            .orderBy("timestamp", "desc")
-            .limit(1)
-            .get();
-        if (!snapshot.empty) {
-            const data = snapshot.docs[0].data();
-            valveDetails = data.summary?.valve_details || {};
-        }
-    } catch (error) {
-        alert("Failed to fetch valve details.");
+    if (predefinedValveGroups.length === 0) {
+        alert("No predefined Valve Groups exist! Please go to the Admin Panel and create a Valve Group first.");
         return;
     }
 
-    // Build modal HTML
-    const modalId = "valveSelectionModal";
+    const modalId = "valveGroupSelectionModal";
     let modalHtml = `
-    <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
+    <div class="modal fade glass-modal" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="${modalId}Label">Select Valves</h5>
+            <h5 class="modal-title" id="${modalId}Label">Select Predefined Valve Group</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <form id="valve-selection-form">
-              <div class="mb-3">
-                <div class="row">
+             <p class="text-muted small">Only predefined valve groups can be queued to regulate pressure. Create more groups in the Admin Panel.</p>
+            <form id="valve-group-selection-form">
+              <div class="list-group">
   `;
-    // Display all valves as checkboxes
-    Object.keys(valveDetails).forEach((valveNo) => {
-        const valveName =
-            valveDetails[valveNo].valve_name || `Valve ${valveNo}`;
+
+    predefinedValveGroups.forEach((group, index) => {
+        const valveNames = group.valves.map(v => v.name).join(", ");
         modalHtml += `
-      <div class="col-12 mb-2">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" value="${valveNo}" id="valve-checkbox-${valveNo}">
-          <label class="form-check-label" for="valve-checkbox-${valveNo}">
-            ${valveName}
-          </label>
-        </div>
-      </div>
-    `;
+            <label class="list-group-item d-flex gap-3 bg-transparent text-white" style="border-color: rgba(255,255,255,0.1);">
+                <input class="form-check-input flex-shrink-0" type="radio" name="valveGroupSelector" id="group-radio-${index}" value="${index}">
+                <span>
+                    <strong>${group.name}</strong>
+                    <small class="d-block text-muted mt-1"><i class="fas fa-water me-1"></i> ${valveNames}</small>
+                </span>
+            </label>
+        `;
     });
+
     modalHtml += `
-                </div>
               </div>
             </form>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="confirm-valve-selection-btn">Add Selected Valves</button>
+            <button type="button" class="btn btn-primary" id="confirm-valve-selection-btn">Add to Queue</button>
           </div>
         </div>
       </div>
     </div>
   `;
-    // Remove any existing modal
+
     const oldModal = document.getElementById(modalId);
     if (oldModal) oldModal.remove();
-    // Append modal to body
     document.body.insertAdjacentHTML("beforeend", modalHtml);
-    // Show modal using Bootstrap
     const modalEl = document.getElementById(modalId);
     const bsModal = new bootstrap.Modal(modalEl, {});
     bsModal.show();
 
-    // Confirm button logic
-    document.getElementById("confirm-valve-selection-btn").onclick =
-        async function () {
-            const form = document.getElementById("valve-selection-form");
-            const checked = Array.from(
-                form.querySelectorAll(".form-check-input:checked")
-            );
-            if (checked.length === 0) {
-                alert("Select at least one valve.");
-                return;
-            }
-            const selectedValves = checked.map((cb) => ({
-                id: cb.value,
-                name: valveDetails[cb.value]?.valve_name || `Valve ${cb.value}`,
-            }));
-            await addToValveQueue(selectedValves);
-            bsModal.hide();
-            setTimeout(() => {
-                // Remove modal from DOM after hidden
-                if (modalEl) modalEl.remove();
-            }, 500);
-        };
+    document.getElementById("confirm-valve-selection-btn").onclick = async function () {
+        const form = document.getElementById("valve-group-selection-form");
+        const checkedRadio = form.querySelector('input[name="valveGroupSelector"]:checked');
+
+        if (!checkedRadio) {
+            alert("Select a valve group.");
+            return;
+        }
+
+        const selectedGroupIndex = checkedRadio.value;
+        const selectedGroup = predefinedValveGroups[selectedGroupIndex];
+
+        if (!selectedGroup) return;
+
+        await addToValveQueue(selectedGroup.valves);
+        bsModal.hide();
+        setTimeout(() => {
+            if (modalEl) modalEl.remove();
+        }, 500);
+    };
 }
 
 // Add to queue button (open modal for selection)
@@ -2354,4 +2609,585 @@ document.getElementById("load-more-fert-btn")?.addEventListener("click", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
     // Initial load will be triggered by tab click
+
+    // Default energy date to today
+    const energyDateInput = document.getElementById("energy-history-date");
+    if (energyDateInput) {
+        energyDateInput.value = getTodayDate();
+    }
+
+    // Attach listener for energy fetch
+    document.getElementById("fetch-energy-btn")?.addEventListener("click", fetchEnergyAnalytics);
+
+    // Initialize Admin Panel Data
+    initValveGroupsListener();
+
+    // Hiding splash screen after loading
+    setTimeout(() => {
+        const splash = document.getElementById("splash-screen");
+        if (splash) {
+            splash.classList.add("fade-out");
+            setTimeout(() => splash.remove(), 1000);
+        }
+    }, 2000);
 });
+
+// --- Energy & Power Analytics ---
+let powerAnalyticsChart = null;
+
+// --- Admin Panel: Predefined Valve Groups Management ---
+let predefinedValveGroups = [];
+
+/**
+ * Initialize Valve Groups listener to keep the Admin Panel and Queue Modal updated.
+ */
+function initValveGroupsListener() {
+    db.collection("irrigation_devices")
+        .doc("MCON874Q000568")
+        .collection("valve_groups")
+        .orderBy("createdAt", "desc")
+        .onSnapshot((snapshot) => {
+            predefinedValveGroups = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            renderAdminValveGroups();
+        }, (error) => {
+            console.error("Error listening to valve groups:", error);
+        });
+}
+
+// Render grid in the Admin Panel
+function renderAdminValveGroups() {
+    const grid = document.getElementById("admin-valve-groups-grid");
+    if (!grid) return;
+
+    if (predefinedValveGroups.length === 0) {
+        grid.innerHTML = `
+            <div class="col-12 text-center py-5 text-muted">
+                <i class="fas fa-layer-group fs-1 mb-3 opacity-50"></i><br>
+                No groups defined. Create your first valve group.
+            </div>`;
+        return;
+    }
+
+    grid.innerHTML = "";
+    predefinedValveGroups.forEach((group) => {
+        const valveNames = group.valves.map(v => v.name).join(", ");
+        const cardNode = document.createElement("div");
+        cardNode.className = "col-md-6 col-lg-4";
+        cardNode.innerHTML = `
+            <div class="card h-100" style="border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02);">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="card-title text-white fw-bold m-0">${group.name}</h6>
+                        <button class="btn btn-sm btn-outline-danger border-0 p-1" onclick="deleteValveGroup('${group.id}')" title="Delete Group">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <p class="text-muted small mb-0 flex-grow-1"><i class="fas fa-water me-1"></i> ${valveNames}</p>
+                    <div class="mt-3 pt-2 text-end border-top" style="border-color: rgba(255,255,255,0.05) !important;">
+                        <span class="badge" style="background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); font-weight: normal;">${group.valves.length} Valve(s)</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.appendChild(cardNode);
+    });
+}
+
+/**
+ * Open modal to create a new predefined valve group (Admin facing)
+ */
+async function openCreateValveGroupModal() {
+    // Fetch latest valve details from snapshot
+    let valveDetails = {};
+    try {
+        const snapshot = await db.collection("irrigation_devices")
+            .doc("MCON874Q000568")
+            .collection(getTodayDate())
+            .orderBy("timestamp", "desc").limit(1).get();
+
+        if (!snapshot.empty) valveDetails = snapshot.docs[0].data().summary?.valve_details || {};
+    } catch (error) {
+        alert("Failed to fetch valve details.");
+        return;
+    }
+
+    const modalId = "adminCreateGroupModal";
+    let modalHtml = `
+    <div class="modal fade glass-modal" id="${modalId}" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Create Valve Group</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="admin-valve-group-form">
+              <div class="mb-4">
+                <label for="group-name-input" class="form-label text-muted small">Group Name</label>
+                <input type="text" class="form-control" id="group-name-input" placeholder="e.g. Mango Farm Sector 1" required>
+              </div>
+              <label class="form-label text-muted small">Select Valves for this Group</label>
+              <div class="row g-2 max-h-300 overflow-auto border p-2 rounded" style="border-color: rgba(255,255,255,0.05) !important;">
+  `;
+    Object.keys(valveDetails).forEach((valveNo) => {
+        const vName = valveDetails[valveNo].valve_name || `Valve ${valveNo}`;
+        modalHtml += `
+        <div class="col-6">
+            <div class="form-check p-2 rounded" style="background: rgba(255,255,255,0.03);">
+              <input class="form-check-input ms-1" type="checkbox" value="${valveNo}" id="admin-val-${valveNo}">
+              <label class="form-check-label ms-2 small" for="admin-val-${valveNo}">${vName}</label>
+            </div>
+        </div>
+        `;
+    });
+    modalHtml += `
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="save-new-group-btn">Save Group</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+    const oldModal = document.getElementById(modalId);
+    if (oldModal) oldModal.remove();
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
+    const bsModal = new bootstrap.Modal(document.getElementById(modalId), {});
+    bsModal.show();
+
+    document.getElementById("save-new-group-btn").onclick = async () => {
+        const form = document.getElementById("admin-valve-group-form");
+        const nameInput = document.getElementById("group-name-input").value.trim();
+        const checked = Array.from(form.querySelectorAll('.form-check-input:checked'));
+
+        if (!nameInput) {
+            alert("Please provide a name for the group.");
+            return;
+        }
+        if (checked.length === 0) {
+            alert("Please select at least one valve.");
+            return;
+        }
+
+        const selectedValves = checked.map((cb) => ({
+            id: cb.value,
+            name: valveDetails[cb.value]?.valve_name || `Valve ${cb.value}`,
+        }));
+
+        try {
+            await db.collection("irrigation_devices")
+                .doc("MCON874Q000568")
+                .collection("valve_groups")
+                .add({
+                    name: nameInput,
+                    valves: selectedValves,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            bsModal.hide();
+        } catch (err) {
+            console.error("Error saving valve group:", err);
+            alert("Failed to save group.");
+        }
+    };
+}
+
+async function deleteValveGroup(groupId) {
+    if (!confirm("Are you sure you want to delete this Valve Group? This will not affect active fertigation but prevents future queueing of this group.")) return;
+    try {
+        await db.collection("irrigation_devices")
+            .doc("MCON874Q000568")
+            .collection("valve_groups")
+            .doc(groupId)
+            .delete();
+    } catch (e) {
+        console.error("Error deleting valve group:", e);
+        alert("Failed to delete group.");
+    }
+}
+
+
+async function fetchEnergyAnalytics() {
+    const dateInput = document.getElementById("energy-history-date").value;
+    if (!dateInput) {
+        alert("Please select a date first.");
+        return;
+    }
+
+    const fetchBtn = document.getElementById("fetch-energy-btn");
+    if (fetchBtn) {
+        fetchBtn.disabled = true;
+        fetchBtn.textContent = "Loading...";
+    }
+
+    try {
+        const snapshot = await db
+            .collection("irrigation_devices")
+            .doc("MCON874Q000568")
+            .collection(dateInput)
+            .orderBy("timestamp", "asc")
+            .get();
+
+        if (snapshot.empty) {
+            alert("No data found for this date.");
+            if (fetchBtn) {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = "Load";
+            }
+            return;
+        }
+
+        const labels = [];
+        const vr = [], vy = [], vb = [];
+        const cr = [], cy = [], cb = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.timestamp && data.summary && data.summary.live_data) {
+                let timeStr;
+                try {
+                    // Try to format Firestore Timestamp
+                    timeStr = moment(data.timestamp.toDate()).format("HH:mm");
+                } catch (e) {
+                    timeStr = moment(new Date(data.timestamp)).format("HH:mm");
+                }
+
+                labels.push(timeStr);
+
+                const live = data.summary.live_data;
+                vr.push(parseFloat(live.voltage_phase_1 || 0));
+                vy.push(parseFloat(live.voltage_phase_2 || 0));
+                vb.push(parseFloat(live.voltage_phase_3 || 0));
+
+                cr.push(parseFloat(live.current_phase_1 || 0));
+                cy.push(parseFloat(live.current_phase_2 || 0));
+                cb.push(parseFloat(live.current_phase_3 || 0));
+            }
+        });
+
+        const ctx = document.getElementById("power-analytics-chart");
+        if (!ctx) return;
+
+        if (powerAnalyticsChart) {
+            powerAnalyticsChart.destroy();
+        }
+
+        powerAnalyticsChart = new Chart(ctx.getContext("2d"), {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: "Voltage R", data: vr, borderColor: "#ef4444", yAxisID: 'y', tension: 0.1, pointRadius: 0 },
+                    { label: "Voltage Y", data: vy, borderColor: "#facc15", yAxisID: 'y', tension: 0.1, pointRadius: 0 },
+                    { label: "Voltage B", data: vb, borderColor: "#3b82f6", yAxisID: 'y', tension: 0.1, pointRadius: 0 },
+                    { label: "Current R", data: cr, borderColor: "rgba(239, 68, 68, 0.4)", borderDash: [5, 5], yAxisID: 'y1', tension: 0.1, pointRadius: 0 },
+                    { label: "Current Y", data: cy, borderColor: "rgba(250, 204, 21, 0.4)", borderDash: [5, 5], yAxisID: 'y1', tension: 0.1, pointRadius: 0 },
+                    { label: "Current B", data: cb, borderColor: "rgba(59, 130, 246, 0.4)", borderDash: [5, 5], yAxisID: 'y1', tension: 0.1, pointRadius: 0 },
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    x: {
+                        grid: { color: "rgba(255,255,255,0.04)" },
+                        ticks: { color: "#8899aa", maxTicksLimit: 12 }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Voltage (V)', color: '#8899aa' },
+                        grid: { color: "rgba(255,255,255,0.04)" },
+                        ticks: { color: "#8899aa" }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'Current (A)', color: '#8899aa' },
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: "#8899aa" }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: "#f0f4f8", usePointStyle: true, boxWidth: 8 } },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 18, 32, 0.92)',
+                        titleColor: '#f0f4f8',
+                        bodyColor: '#f0f4f8',
+                        borderColor: 'rgba(52, 211, 153, 0.15)',
+                        borderWidth: 1
+                    }
+                }
+            }
+        });
+
+    } catch (e) {
+        console.error("Error fetching energy analytics:", e);
+        alert("An error occurred while fetching energy data.");
+    } finally {
+        if (fetchBtn) {
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = "Load";
+        }
+    }
+}
+
+// --- Fertigation Valve Usage Statistics ---
+let fertigationValveStatsChart = null;
+
+function updateFertigationValveStatsChart(processedLogs, valveDetails) {
+    const valveStats = {};
+
+    processedLogs.forEach(log => {
+        const activeValvesInThisTank = new Set();
+
+        if (log.overlappingTimers) {
+            log.overlappingTimers.forEach(timer => {
+                if (timer.on_valves) {
+                    const valveIndices = timer.on_valves.split("-").filter(v => v !== "0");
+                    valveIndices.forEach(v => {
+                        const valveName = valveDetails[v] ? valveDetails[v].valve_name : `Valve ${v}`;
+
+                        if (!valveStats[valveName]) {
+                            valveStats[valveName] = { duration: 0, tanks: 0 };
+                        }
+
+                        const tStart = new Date(timer.dt);
+                        const tEnd = new Date(timer.last_sync);
+                        const fStart = log.startTime.toDate();
+                        const fEnd = log.endTime ? log.endTime.toDate() : new Date();
+
+                        const overlapStart = new Date(Math.max(tStart, fStart));
+                        const overlapEnd = new Date(Math.min(tEnd, fEnd));
+                        if (overlapStart < overlapEnd) {
+                            const overlapMinutes = Math.round((overlapEnd - overlapStart) / 60000);
+                            valveStats[valveName].duration += overlapMinutes;
+                        }
+
+                        activeValvesInThisTank.add(valveName);
+                    });
+                }
+            });
+        }
+
+        activeValvesInThisTank.forEach(valveName => {
+            valveStats[valveName].tanks += 1;
+        });
+    });
+
+    const sortedValves = Object.entries(valveStats)
+        .sort((a, b) => b[1].duration - a[1].duration);
+
+    const labels = sortedValves.map(item => item[0]);
+    const durData = sortedValves.map(item => item[1].duration);
+    const tanksData = sortedValves.map(item => item[1].tanks);
+
+    const ctx = document.getElementById("fertigation-valve-stats-chart");
+    if (!ctx) return;
+
+    if (fertigationValveStatsChart) {
+        fertigationValveStatsChart.destroy();
+    }
+
+    fertigationValveStatsChart = new Chart(ctx.getContext("2d"), {
+        type: "bar",
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: "Active Duration (mins)",
+                    data: durData,
+                    backgroundColor: "rgba(45, 212, 191, 0.6)",
+                    borderColor: "rgba(45, 212, 191, 1)",
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    yAxisID: 'y'
+                },
+                {
+                    label: "Tanks Active In",
+                    data: tanksData,
+                    type: "line",
+                    backgroundColor: "rgba(139, 92, 246, 1)",
+                    borderColor: "rgba(139, 92, 246, 1)",
+                    borderWidth: 2,
+                    pointBackgroundColor: "rgba(139, 92, 246, 1)",
+                    pointRadius: 4,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: "#8899aa" }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    title: { display: true, text: 'Minutes', color: '#8899aa' },
+                    grid: { color: "rgba(255,255,255,0.04)" },
+                    ticks: { color: "#8899aa" },
+                    beginAtZero: true
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    title: { display: true, text: 'Tank Count', color: '#8899aa' },
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: "#8899aa", stepSize: 1 },
+                    beginAtZero: true
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: "#f0f4f8", usePointStyle: true, boxWidth: 8 }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(10, 18, 32, 0.92)',
+                    titleColor: '#f0f4f8',
+                    bodyColor: '#f0f4f8',
+                    borderColor: 'rgba(52, 211, 153, 0.15)',
+                    borderWidth: 1
+                }
+            }
+        }
+    });
+}
+
+let currentSmartRecommendation = null;
+
+/**
+ * Smart Scheduler: Fetches Deterministic Logic from Cloud Functions.
+ * Now integrated directly into the queue display as a "faded" suggestion.
+ */
+async function generateSmartRecommendation() {
+    try {
+        const cloudFunctionUrl = `${getBaseUrl()}/getSmartRecommendation`;
+
+        const response = await fetch(cloudFunctionUrl);
+        const data = await response.json();
+
+        if (data.success && data.recommendation) {
+            currentSmartRecommendation = data.recommendation;
+            renderValveGroupQueue();
+        } else if (data.debug) {
+            console.log("[Smart Rec Debug]:", data.debug);
+        }
+    } catch (e) {
+        console.error("Smart Recommendation Sync Error:", e);
+    }
+}
+
+/**
+ * Send notification to Zoho CLIQ
+ */
+async function notifyZohoCliq(message) {
+    const webhook = "https://cliq.zoho.in/api/v2/bots/fertigationlogs/incoming?zapikey=1001.0c97cb7893d99ec941afeb3bc24bce00.4cfd4b9283927796a146b5f7e8ad8f97";
+    try {
+        await fetch(webhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: message })
+        });
+    } catch (err) {
+        console.error("Failed to send CLIQ notification:", err);
+    }
+}
+
+// --- Quick Date Presets Utility ---
+function setupDatePresets() {
+    const datePairs = [
+        { label: 'Energy', single: 'energy-history-date', action: 'fetch-energy-btn' },
+        { label: 'Pressure', from: 'pressure-from-date', to: 'pressure-to-date', action: 'analyze-pressure-btn' },
+        { label: 'Fert Chart', from: 'fert-chart-from-date', to: 'fert-chart-to-date', action: 'update-fert-charts-btn' },
+        { label: 'Fert History', from: 'fert-history-from-date', to: 'fert-history-to-date', action: 'fetch-fert-history-btn' },
+        { label: 'Timer History', from: 'history-from-date', to: 'history-to-date', action: 'fetch-history-btn' }
+    ];
+
+    datePairs.forEach(pair => {
+        const fromEl = document.getElementById(pair.from || pair.single);
+        if (!fromEl) return;
+
+        // Find a parent container to inject into (flex-wrap containers in your HTML)
+        const container = fromEl.closest('.d-flex.align-items-center.gap-2, .d-flex.align-items-center.gap-3');
+        if (!container) return;
+
+        // Check if presets already exist
+        if (container.parentElement.querySelector('.date-presets')) return;
+
+        const presetDiv = document.createElement('div');
+        presetDiv.className = 'date-presets w-100 mt-2 mb-3';
+
+        const presets = [
+            { name: 'Today', days: 0 },
+            { name: 'Yesterday', days: 1 },
+            { name: 'Past Week', days: 7 },
+            { name: 'Past Month', days: 30 }
+        ];
+
+        presets.forEach(p => {
+            const btn = document.createElement('button');
+            btn.className = 'btn preset-btn';
+            btn.textContent = p.name;
+            btn.onclick = (e) => {
+                e.preventDefault();
+
+                // Remove active from others
+                presetDiv.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const end = new Date();
+                const start = new Date();
+
+                if (p.name === 'Today') {
+                    // Today only
+                    start.setHours(0, 0, 0, 0);
+                } else if (p.name === 'Yesterday') {
+                    start.setDate(start.getDate() - 1);
+                    end.setDate(end.getDate() - 1);
+                } else {
+                    start.setDate(start.getDate() - p.days);
+                }
+
+                const startStr = start.toLocaleDateString('sv-SE');
+                const endStr = end.toLocaleDateString('sv-SE');
+
+                if (pair.single) {
+                    fromEl.value = startStr;
+                } else {
+                    fromEl.value = startStr;
+                    const toEl = document.getElementById(pair.to);
+                    if (toEl) toEl.value = endStr;
+                }
+
+                // Trigger action button if it exists
+                const actionBtn = document.getElementById(pair.action);
+                if (actionBtn) {
+                    setTimeout(() => actionBtn.click(), 100);
+                }
+            };
+            presetDiv.appendChild(btn);
+        });
+
+        // Inject near the input container
+        container.parentElement.appendChild(presetDiv);
+    });
+}

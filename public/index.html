@@ -4,15 +4,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Irrigation Dashboard</title>
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <title>DCON | Smart Irrigation Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="styles.css?v=2">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <!-- Firebase Modular SDKs for AI (v12+) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js",
+        "firebase/ai": "https://www.gstatic.com/firebasejs/12.2.1/firebase-ai.js"
+      }
+    }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
   <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
@@ -23,7 +36,7 @@
     }
 
     .sortable:hover {
-      background-color: #f8f9fa;
+      background-color: rgba(255, 255, 255, 0.05);
     }
 
     .sort-icon {
@@ -33,244 +46,382 @@
   </style>
 </head>
 
-<body>
-  <div class="container py-4">
-    <!-- Header with title and profile button -->
-    <div class="position-relative mb-4">
-      <h2 class="text-center animate__animated animate__fadeInDown">Irrigation Monitoring Dashboard</h2>
-
-      <!-- User Profile Button (top-right overlay) -->
-      <button id="user-menu-btn"
-        class="btn btn-outline-primary d-flex align-items-center position-absolute top-0 end-0 me-3"
-        data-bs-toggle="modal" data-bs-target="#userModal">
-        <img id="user-avatar" src="images/user-default.png" alt="User"
-          style="width:32px;height:32px;border-radius:50%;margin-right:8px;" />
-        <span id="user-name">Sign in with Google</span>
-      </button>
+<body class="bg-dark text-white">
+  <!-- Splash Screen -->
+  <div id="splash-screen">
+    <div class="splash-logo-container">
+      <img src="images/logo.png" alt="DCON Logo">
     </div>
+    <div class="splash-loader">
+      <div class="splash-loader-bar"></div>
+    </div>
+    <div class="mt-3 text-muted small" style="letter-spacing: 0.1em; text-transform: uppercase;">Initializing Systems
+    </div>
+  </div>
 
-    <p id="last-updated-time" class="text-center text-muted">Last updated: Loading...</p>
+  <div class="app-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="images/logo.png" alt="DCON Logo" class="sidebar-logo">
+        <h1 class="sidebar-brand">DCON</h1>
+      </div>
 
-    <!-- Tabs -->
-    <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboard"
-          type="button" role="tab">Dashboard</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="fertigation-logs-tab" data-bs-toggle="tab" data-bs-target="#fertigation-logs"
-          type="button" role="tab">Fertigation Logs</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="timer-history-tab" data-bs-toggle="tab" data-bs-target="#timer-history"
-          type="button" role="tab">Timer History</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="valve-groups-tab" data-bs-toggle="tab" data-bs-target="#valve-groups" type="button"
-          role="tab">Valve Groups</button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="pressure-analysis-tab" data-bs-toggle="tab" data-bs-target="#pressure-analysis"
-          type="button" role="tab">Pressure Analysis</button>
-      </li>
-    </ul>
+      <nav class="sidebar-nav">
+        <button class="nav-item-btn active" data-target="#dashboard">
+          <i class="fas fa-home"></i> Dashboard
+        </button>
+        <button class="nav-item-btn" data-target="#energy-analytics">
+          <i class="fas fa-bolt"></i> Energy Analytics
+        </button>
+        <button class="nav-item-btn" data-target="#pressure-analysis">
+          <i class="fas fa-water"></i> Pressure & Flow
+        </button>
+        <button class="nav-item-btn" data-target="#fertigation-logs">
+          <i class="fas fa-leaf"></i> Fertigation
+        </button>
+        <button class="nav-item-btn" data-target="#timer-history">
+          <i class="fas fa-history"></i> Timer History
+        </button>
+        <button class="nav-item-btn" data-target="#admin-panel">
+          <i class="fas fa-cogs"></i> Admin Panel
+        </button>
+        <button class="nav-item-btn" data-target="#ai-assistant">
+          <i class="fas fa-robot"></i> AI Assistant
+        </button>
+      </nav>
 
-    <!-- Tab Content -->
-    <div class="tab-content pt-3" id="dashboardTabsContent">
-      <div class="tab-pane fade show active animate__animated animate__fadeInUp" id="dashboard" role="tabpanel">
-        <!-- General Dashboard: display summary visuals, integrate electricity, pressure, and timer overview neatly here -->
-        <div id="dashboard-overview" class="mt-3">
-          <div class="row gy-3">
-            <div class="col-md-6 col-lg-4 mb-4">
-              <div class="card h-100">
-                <div class="card-body text-center">
-                  <h5 class="card-title text-muted">Sump Status</h5>
-                  <div id="electricity-status" class="mb-0">
-                    <img id="motor-image" src="images/motor-off.png" alt="Motor">
-                    <div id="motor-status-text" class="mt-2 fw-bold text-secondary">Loading...</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4 mb-4">
-              <div class="card h-100">
-                <div class="card-body text-center">
-                  <h5 class="card-title text-muted">Pressure (In/Out)</h5>
-                  <div class="d-flex justify-content-around align-items-center">
-                    <!-- Input Pressure Gauge -->
-                    <div class="text-center">
-                      <canvas id="input-pressure-gauge" width="120" height="120"></canvas>
-                      <p class="mt-2 fw-bold">Input</p>
-                    </div>
-                    <!-- Output Pressure Gauge -->
-                    <div class="text-center">
-                      <canvas id="output-pressure-gauge" width="120" height="120"></canvas>
-                      <p class="mt-2 fw-bold">Output</p>
-                    </div>
-                  </div>
-                  <!-- Add linear gauge for pressure difference -->
-                  <div class="mt-3">
-                    <div class="text-center mb-2">
-                      <span id="pressure-difference-value" style="font-size: 1.5rem; font-weight: bold;">0.00 difference
-                        (bar)</span>
-                    </div>
-                    <div class="progress" style="height: 20px;">
-                      <div id="pressure-difference-bar" class="progress-bar" role="progressbar" style="width: 0%;"
-                        aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4 mb-4">
-              <div class="card h-100">
-                <div class="card-body text-center">
-                  <h5 class="card-title text-muted">Current Timer</h5>
-                  <div class="d-flex flex-column align-items-center">
-                    <div id="timer-images"></div>
-                    <p id="dashboard-current-timer" class="text-primary mt-2">Loading...</p>
-                    <!-- Add: Valves list display -->
-                    <div id="dashboard-current-valves" class="mt-2"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div class="sidebar-footer">
+        <button class="user-profile-btn" data-bs-toggle="modal" data-bs-target="#userModal">
+          <img id="user-avatar" src="images/user-default.png" alt="User" class="user-avatar" />
+          <div class="user-info">
+            <span class="user-name" id="user-name">Sign in</span>
+            <span class="user-status">Manage Account</span>
           </div>
-          <div class="row gy-3 mt-3">
-            <!-- Voltage & Current Chart Card -->
-            <div class="col-md-12 col-lg-6 mb-4">
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Mobile Nav Toggle -->
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle">
+        <i class="fas fa-bars"></i> Menu
+      </button>
+
+      <!-- Page Header -->
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
+        <h2 class="page-title m-0" id="current-page-title">Dashboard</h2>
+        <p id="last-updated-time" class="text-muted mt-2 mt-md-0 mb-0">Last updated: Loading...</p>
+      </div>
+
+      <!-- Content Views -->
+      <div class="views-wrapper pt-3">
+
+        <!-- 1. DASHBOARD VIEW -->
+        <div class="tab-pane active" id="dashboard">
+          <div class="row gy-4">
+
+            <!-- Sump Status -->
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100">
+                <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
+                  <h5 class="card-title">Sump Status</h5>
+                  <div id="electricity-status" class="mt-2">
+                    <img id="motor-image" class="dash-img" src="images/motor-off.png" alt="Motor">
+                    <div class="status-indicator mt-3 d-flex align-items-center justify-content-center">
+                      <div id="motor-status-dot" class="status-dot inactive m-0"></div>
+                      <span id="motor-status-text" class="text-white m-0">Loading...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Current Timer -->
+            <div class="col-md-6 col-lg-4">
+              <div class="card h-100">
+                <div class="card-body text-center d-flex flex-column align-items-center justify-content-center">
+                  <h5 class="card-title">Current Timer</h5>
+                  <div id="timer-images" class="d-flex gap-2 justify-content-center flex-wrap pt-2"></div>
+                  <h4 id="dashboard-current-timer" class="text-white fw-bold mt-4 mb-1">Loading...</h4>
+                  <div id="dashboard-current-valves" class="small text-muted mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Next Timer & Fertigation Status (Split Card or Stacked) -->
+            <div class="col-md-12 col-lg-4 d-flex flex-column gap-4">
+              <div class="card flex-grow-1">
+                <div class="card-body text-center d-flex flex-column justify-content-center pb-2 pt-3">
+                  <h5 class="card-title mb-3">Next Timer</h5>
+                  <div class="d-flex align-items-center justify-content-center gap-3">
+                    <img id="next-timer-image" src="images/none.png" alt="Next Timer" style="width: 70px;" />
+                    <h5 id="dashboard-next-timer" class="text-white m-0">Loading...</h5>
+                  </div>
+                </div>
+              </div>
+              <div class="card flex-grow-1" id="fertigation-status-card">
+                <div
+                  class="card-body text-center d-flex flex-column justify-content-center align-items-center pb-2 pt-3">
+                  <h5 class="card-title mb-3">Fertigation Status</h5>
+                  <div class="status-indicator d-flex align-items-center justify-content-center">
+                    <div id="fertigation-status-dot" class="status-dot inactive m-0"></div>
+                    <span id="fertigation-status-text" class="text-white m-0">Inactive</span>
+                  </div>
+                  <div id="fertigation-timer" class="text-white small"></div>
+                  <div id="fertigation-notes-display" class="small text-muted mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Pressure Gauges -->
+            <div class="col-12 col-xl-6">
               <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title text-muted text-center">Voltage & Current (3 Phase)</h5>
-                  <div class="d-flex justify-content-around align-items-center" style="padding-top: 40px !important;">
-                    <div class="text-center"
-                      style="background-color: #ff4d4f; color: white; padding: 20px; border-radius: 10px; width: 150px;">
-                      <h6>R</h6>
-                      <p id="voltage-phase-1-box" class="mb-0">0 V</p>
-                      <p id="current-phase-1-box" class="mb-0">0 A</p>
+                  <h5 class="card-title text-center">Pressure (In/Out)</h5>
+                  <div class="d-flex justify-content-around align-items-center mt-4 pressure-gauge-row">
+                    <div class="text-center">
+                      <canvas id="input-pressure-gauge" width="130" height="130"></canvas>
+                      <h6 class="mt-3 text-white">Input</h6>
                     </div>
-                    <div class="text-center"
-                      style="background-color: #f7c600; color: white; padding: 20px; border-radius: 10px; width: 150px;">
-                      <h6>Y</h6>
-                      <p id="voltage-phase-2-box" class="mb-0">0 V</p>
-                      <p id="current-phase-2-box" class="mb-0">0 A</p>
+                    <div class="text-center d-flex flex-column justify-content-center align-items-center w-50 px-4">
+                      <h3 id="pressure-difference-value" class="text-white mb-2"
+                        style="font-family: var(--font-primary);">0.00</h3>
+                      <p class="text-muted small">difference (bar)</p>
+                      <div class="pressure-progress-wrapper w-100">
+                        <div id="pressure-difference-bar" class="pressure-progress-bar" style="width: 0%;"></div>
+                      </div>
                     </div>
-                    <div class="text-center"
-                      style="background-color: #007bff; color: white; padding: 20px; border-radius: 10px; width: 150px;">
-                      <h6>B</h6>
-                      <p id="voltage-phase-3-box" class="mb-0">0 V</p>
-                      <p id="current-phase-3-box" class="mb-0">0 A</p>
+                    <div class="text-center">
+                      <canvas id="output-pressure-gauge" width="130" height="130"></canvas>
+                      <h6 class="mt-3 text-white">Output</h6>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <!-- Add Next Timer Card -->
-            <div class="col-md-6 col-lg-3 mb-4">
+
+            <!-- Live 3 Phase Power -->
+            <div class="col-12 col-xl-6">
               <div class="card h-100">
-                <div class="card-body text-center">
-                  <h5 class="card-title text-muted">Next Timer</h5>
-                  <div class="d-flex flex-column align-items-center">
-                    <img id="next-timer-image" src="images/none.png" alt="Next Timer" style="width: 150px;" />
-                    <p id="dashboard-next-timer" class="text-secondary mt-2">Loading...</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Add Fertigation Status Card -->
-            <div class="col-md-6 col-lg-3 mb-4">
-              <div class="card h-100" id="fertigation-status-card">
-                <div class="card-body text-center" style="padding: 10px 0;">
-                  <h5 class="card-title text-muted">Fertigation Status</h5>
-                  <div class="d-flex flex-column align-items-center">
-                    <div class="fertigation-indicator mb-2">
-                      <div id="fertigation-status-dot" class="status-dot"></div>
-                      <span id="fertigation-status-text">Inactive</span>
+                <div class="card-body">
+                  <h5 class="card-title text-center">Voltage & Current (3 Phase)</h5>
+                  <div class="phase-container mt-4 pb-2">
+                    <div class="phase-box phase-r">
+                      <h6>R phase</h6>
+                      <p id="voltage-phase-1-box" class="mb-1 text-white fs-4">0 V</p>
+                      <p id="current-phase-1-box" class="m-0 text-muted small">0 A</p>
                     </div>
-                    <div id="fertigation-timer" class="text-muted"></div>
-                    <div id="fertigation-notes-display" class="small text-muted mt-2"></div>
+                    <div class="phase-box phase-y">
+                      <h6>Y phase</h6>
+                      <p id="voltage-phase-2-box" class="mb-1 text-white fs-4">0 V</p>
+                      <p id="current-phase-2-box" class="m-0 text-muted small">0 A</p>
+                    </div>
+                    <div class="phase-box phase-b">
+                      <h6>B phase</h6>
+                      <p id="voltage-phase-3-box" class="mb-1 text-white fs-4">0 V</p>
+                      <p id="current-phase-3-box" class="m-0 text-muted small">0 A</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div class="row gy-3 mt-3">
+
+
+            <!-- AI Insights -->
             <div class="col-12">
-              <div class="card h-100">
-                <div class="card-body text-center">
-                  <h5 class="card-title text-muted">AI Anomaly Detection</h5>
-                  <div id="ai-insights" class="text-start"></div>
-                  <button onclick="runAiAnomalyTest()" class="btn btn-outline-primary mt-3">Run AI Test</button>
+              <div class="card">
+                <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center gap-4 p-4">
+                  <div class="w-100">
+                    <h5 class="card-title mb-2 text-primary d-flex align-items-center gap-2"
+                      style="color: var(--accent-cyan) !important;">
+                      <i class="fas fa-robot"></i> AI Anomaly Detection
+                    </h5>
+                    <div id="ai-insights" class="text-white">System standing by for analysis.</div>
+                  </div>
+                  <div class="flex-shrink-0">
+                    <button onclick="runAiAnomalyTest()" class="btn btn-primary px-4 py-3 w-100">
+                      <i class="fas fa-magic me-2"></i>Run AI Test
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 2. ENERGY ANALYTICS VIEW -->
+        <div class="tab-pane" id="energy-analytics">
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <div
+                    class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 border-bottom border-light pb-3"
+                    style="border-color: rgba(255,255,255,0.05) !important;">
+                    <h5 class="card-title m-0">Power Draw Trends</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                      <label for="energy-history-date" class="text-muted small mb-0">Date:</label>
+                      <input type="date" id="energy-history-date" class="form-control form-control-sm"
+                        style="max-width: 150px;">
+                      <button id="fetch-energy-btn" class="btn btn-primary btn-sm px-3">Load</button>
+                    </div>
+                  </div>
+                  <div class="chart-container" style="height: 480px;">
+                    <canvas id="power-analytics-chart"></canvas>
+                  </div>
+                  <p class="text-muted text-center mt-3 small">Track all 3-phase voltages and currents across the day.
+                    Peak times can be cross-referenced with your active irrigation cycles.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-12 mt-4">
+              <div class="card">
+                <div class="card-body text-center p-5">
+                  <h5 class="card-title text-muted mb-3"><i class="fas fa-tools me-2"></i>Irrigation Power Overlay</h5>
+                  <p class="text-muted">Currently calculating power utilization per valve group...</p>
+                  <p class="small text-muted">This module correlates your timer activity directly with the smart meter.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="tab-pane fade" id="timer-history" role="tabpanel">
-        <div class="d-flex justify-content-center align-items-center mb-3">
-          <label for="history-from-date" class="me-2">From:</label>
-          <input type="date" id="history-from-date" class="form-control me-3" style="max-width: 200px;">
-          <label for="history-to-date" class="me-2">To:</label>
-          <input type="date" id="history-to-date" class="form-control me-3" style="max-width: 200px;">
-          <label for="history-timer-name-dropdown" class="me-2">Timer Name:</label>
-          <select id="history-timer-name-dropdown" class="form-select me-3" style="max-width: 200px;">
-            <option value="">All Timers</option>
-          </select>
-          <button id="fetch-history-btn" class="btn btn-primary">Fetch</button>
-        </div>
-        <div id="timer-history-content" class="mt-3">
-          <p class="text-center text-muted">Loading timer history...</p>
-        </div>
-      </div>
 
-      <div class="tab-pane fade" id="valve-groups" role="tabpanel">
-        <div class="d-flex justify-content-center align-items-center mb-3">
-          <p class="text-muted">Select a valve group to view pressure history.</p>
-        </div>
-        <div id="valve-group-cards" class="row g-3 mt-3"></div>
-      </div>
-
-      <div class="tab-pane fade" id="pressure-analysis" role="tabpanel">
-        <div class="d-flex justify-content-center align-items-center mb-3">
-          <label for="pressure-timer-dropdown" class="me-2">Timer Name:</label>
-          <select id="pressure-timer-dropdown" class="form-select me-3" style="max-width: 200px;">
-            <option value="">Select Timer</option>
-          </select>
-          <button id="analyze-pressure-btn" class="btn btn-primary">Analyze</button>
-        </div>
-        <div id="pressure-chart-container" class="mt-3 text-center" style="max-height: 600px; overflow: hidden;">
-          <p class="text-muted">Select a timer to view pressure analysis</p>
-        </div>
-      </div>
-      <div class="tab-pane fade" id="fertigation-logs" role="tabpanel">
-        <div class="card mt-4">
-          <div class="card-body">
-            <h5 class="card-title text-muted">Valve Queue</h5>
-            <div id="valve-group-queue-controls" class="mb-3">
-              <button id="add-valve-group-btn" class="btn btn-primary">Select Valves and Add to Queue</button>
-              <p class="text-muted mt-2">Choose multiple valves using the modal interface.</p>
+        <!-- 3. PRESSURE & FLOW VIEW -->
+        <div class="tab-pane" id="pressure-analysis">
+          <div class="row">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+                    style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                    <h5 class="card-title m-0">Timer Pressure Profiler</h5>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="pressure-from-date" class="text-muted mb-0 small text-uppercase">From</label>
+                        <input type="date" id="pressure-from-date" class="form-control form-control-sm"
+                          style="max-width: 140px;">
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="pressure-to-date" class="text-muted mb-0 small text-uppercase">To</label>
+                        <input type="date" id="pressure-to-date" class="form-control form-control-sm"
+                          style="max-width: 140px;">
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="pressure-timer-dropdown" class="text-muted mb-0 small text-uppercase">Timer</label>
+                        <select id="pressure-timer-dropdown" class="form-select form-select-sm"
+                          style="max-width: 180px;">
+                          <option value="">Select Timer</option>
+                        </select>
+                      </div>
+                      <div class="form-check form-switch mb-0 ms-2">
+                        <input class="form-check-input" type="checkbox" id="include-backwash-toggle">
+                        <label class="form-check-label text-muted small text-uppercase"
+                          for="include-backwash-toggle">Backwash</label>
+                      </div>
+                      <button id="analyze-pressure-btn" class="btn btn-primary btn-sm px-4">Analyze</button>
+                    </div>
+                  </div>
+                  <div id="pressure-chart-container" class="mt-4" style="height: 550px; position: relative;">
+                    <p class="text-muted text-center mt-5 pt-5"><i
+                        class="fas fa-chart-line fs-1 mb-3 opacity-50"></i><br>Select a timer to generate pressure
+                      signature.</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <h6 class="mt-3">Queue:</h6>
-            <ul id="valve-group-queue-list" class="list-group mb-3"></ul>
+
           </div>
+
+
+
         </div>
-        <div class="row">
+      </div>
+
+      <!-- 4. FERTIGATION LOGS VIEW -->
+      <div class="tab-pane" id="fertigation-logs">
+        <div class="row gy-4">
+
           <div class="col-12">
             <div class="card">
               <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h5 class="card-title mb-0">Tank History</h5>
-                  <div class="d-flex align-items-center">
-                    <label for="fert-history-from-date" class="me-2">From:</label>
-                    <input type="date" id="fert-history-from-date" class="form-control me-3" style="max-width: 150px;">
-                    <label for="fert-history-to-date" class="me-2">To:</label>
-                    <input type="date" id="fert-history-to-date" class="form-control me-3" style="max-width: 150px;">
-                    <button id="fetch-fert-history-btn" class="btn btn-primary btn-sm">Fetch</button>
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
+                  <h5 class="card-title m-0">Fertigation Duration Overview</h5>
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                      <label for="fert-chart-from-date" class="text-muted mb-0 small">From</label>
+                      <input type="date" id="fert-chart-from-date" class="form-control form-control-sm"
+                        style="max-width: 140px;">
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <label for="fert-chart-to-date" class="text-muted mb-0 small">To</label>
+                      <input type="date" id="fert-chart-to-date" class="form-control form-control-sm"
+                        style="max-width: 140px;">
+                    </div>
+                    <button id="update-fert-charts-btn" class="btn btn-primary btn-sm px-3">Update</button>
                   </div>
                 </div>
+                <div class="chart-container" style="height: 280px;">
+                  <canvas id="fertigation-duration-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title mb-3">Fertigation Valve Usage</h5>
+                <div class="chart-container" style="height: 380px;">
+                  <canvas id="fertigation-valve-stats-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-4">
+            <div class="card h-100">
+              <div class="card-body">
+                <h5 class="card-title border-bottom border-secondary pb-3 mb-4">Valve Queue</h5>
+                <div id="valve-group-queue-controls" class="mb-4 text-center">
+                  <button id="add-valve-group-btn" class="btn btn-outline-primary w-100 mb-2 py-2">
+                    <i class="fas fa-plus-circle me-2"></i>Add Valves to Queue
+                  </button>
+                  <p class="text-muted small">Select multiple valves using the modal interface.</p>
+                </div>
+                <h6 class="text-white mt-4 border-bottom border-secondary pb-2">Current Order:</h6>
+                <ul id="valve-group-queue-list" class="list-group list-group-flush mb-3 bg-transparent"></ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-8">
+            <div class="card h-100">
+              <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+                  style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                  <h5 class="card-title m-0">Tank History</h5>
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                      <label for="fert-history-from-date" class="text-muted mb-0 small">From</label>
+                      <input type="date" id="fert-history-from-date" class="form-control form-control-sm"
+                        style="max-width: 140px;">
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <label for="fert-history-to-date" class="text-muted mb-0 small">To</label>
+                      <input type="date" id="fert-history-to-date" class="form-control form-control-sm"
+                        style="max-width: 140px;">
+                    </div>
+                    <button id="fetch-fert-history-btn" class="btn btn-primary btn-sm px-3">Fetch</button>
+                  </div>
+                </div>
+
                 <div class="table-responsive">
-                  <table class="table">
+                  <table class="table table-hover">
                     <thead>
                       <tr>
                         <th>Date</th>
@@ -280,38 +431,266 @@
                       </tr>
                     </thead>
                     <tbody id="fertigation-history">
+                      <!-- Filled by JS -->
                     </tbody>
                   </table>
                 </div>
-                <div class="text-center mt-3">
-                  <button id="load-more-fert-btn" class="btn btn-outline-primary btn-sm" style="display: none;">Load
-                    More</button>
+                <div class="text-center mt-4">
+                  <button id="load-more-fert-btn" class="btn btn-outline-primary px-4 py-2" style="display: none;">View
+                    Older Logs</button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 5. TIMER HISTORY VIEW -->
+      <div class="tab-pane" id="timer-history">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+              style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+              <div class="d-flex flex-wrap align-items-center gap-4">
+                <div class="d-flex align-items-center gap-2">
+                  <label for="history-from-date" class="text-muted mb-0 small text-uppercase">From</label>
+                  <input type="date" id="history-from-date" class="form-control" style="max-width: 150px;">
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <label for="history-to-date" class="text-muted mb-0 small text-uppercase">To</label>
+                  <input type="date" id="history-to-date" class="form-control" style="max-width: 150px;">
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <label for="history-timer-name-dropdown" class="text-muted mb-0 small text-uppercase">Timer
+                    Name</label>
+                  <select id="history-timer-name-dropdown" class="form-select" style="max-width: 200px;">
+                    <option value="">All Timers</option>
+                  </select>
+                </div>
+              </div>
+              <button id="fetch-history-btn" class="btn btn-primary px-4 py-2">Fetch Logs</button>
+            </div>
+            <div id="timer-history-content" class="mt-4">
+              <div class="text-center py-5 text-muted">
+                <i class="fas fa-file-alt fs-1 mb-3 opacity-50"></i><br>
+                Select filters to load timer history.
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <!-- User Profile Modal -->
-    <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content text-center p-4">
-          <img id="modal-user-photo" src="images/user-default.png" alt="Profile Picture" class="rounded-circle mb-3"
-            style="width:80px;height:80px;" />
-          <h5 id="modal-user-name">Not signed in</h5>
-          <p id="modal-user-email" class="text-muted mb-3"></p>
 
-          <button id="login-btn" class="btn btn-primary w-100 mb-2">Sign in with Google</button>
-          <button id="logout-btn" class="btn btn-outline-danger w-100" style="display:none;">Log Out</button>
+      <!-- 6. ADMIN PANEL VIEW -->
+      <div class="tab-pane" id="admin-panel">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+              style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+              <h5 class="card-title m-0"><i class="fas fa-layer-group me-2"></i>Valve Group Configurations</h5>
+              <button class="btn btn-primary" onclick="openCreateValveGroupModal()">
+                <i class="fas fa-plus me-2"></i>Create Valve Group
+              </button>
+            </div>
+            <p class="text-muted small mb-4">
+              Predefined valve groups combine multiple valves into a single logical unit. Only these predetermined
+              groups can be added to the Active Fertigation Queue to ensure proper pressure regulation.
+            </p>
+            <div class="row gy-4" id="admin-valve-groups-grid">
+              <div class="col-12 text-center py-5 text-muted">
+                <i class="fas fa-spinner fa-spin fs-2 mb-3"></i><br>Loading configurations...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Integrated Card -->
+        <div class="card mt-4">
+          <div class="card-body">
+            <div class="d-flex align-items-center mb-3 p-3 rounded-3"
+              style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+              <h5 class="card-title m-0"><i class="fas fa-robot me-2" style="color:var(--accent-teal);"></i>AI Assistant
+                Status</h5>
+            </div>
+            <p class="text-muted small mb-0">
+              The AI Assistant is integrated with Firebase AI Logic and the <strong
+                style="color:var(--accent-teal);">Gemini 3</strong> model.
+              No manual API key is required as it uses your secure Firebase project credentials.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. AI ASSISTANT VIEW -->
+      <div class="tab-pane" id="ai-assistant">
+        <div class="card h-100" style="min-height: 80vh;">
+          <div class="card-body d-flex flex-column p-0">
+            <!-- Header -->
+            <div class="d-flex align-items-center p-3 border-bottom"
+              style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05) !important;">
+              <h5 class="card-title m-0 d-flex align-items-center gap-2" style="color: var(--accent-cyan);">
+                <i class="fas fa-robot"></i> Gemini Assistant
+              </h5>
+            </div>
+
+            <!-- Chat Window -->
+            <div id="ai-chat-window" class="flex-grow-1 p-4 overflow-auto d-flex flex-column gap-3"
+              style="background: rgba(0,0,0,0.2);">
+              <!-- Welcome Message -->
+              <div class="ai-message d-flex gap-3 align-items-start max-w-75">
+                <div class="flex-shrink-0 d-flex justify-content-center align-items-center rounded-circle text-white"
+                  style="width:36px;height:36px;background:linear-gradient(135deg,#06b6d4,#6366f1);">
+                  <i class="fas fa-robot" style="font-size:14px;"></i>
+                </div>
+                <div class="p-3 rounded-4 text-light"
+                  style="border-top-left-radius:6px!important;line-height:1.6;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);">
+                  Hello! I am your AI assistant, powered by Gemini 3 and Firebase. I can check active valves, analyze
+                  fertigation history, and help you schedule your next run.
+                  How can I help you today?
+                </div>
+              </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-3 border-top"
+              style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05) !important;">
+              <form id="ai-chat-form" class="d-flex gap-2">
+                <input type="text" id="ai-chat-input" class="form-control bg-dark text-white border-secondary py-2"
+                  placeholder="Ask Gemini..." autocomplete="off" disabled>
+                <button type="submit" id="ai-chat-send-btn"
+                  class="btn btn-primary px-4 py-2 d-flex align-items-center gap-2" disabled>
+                  <i class="fas fa-paper-plane"></i> <span class="d-none d-md-inline">Send</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+  </div> <!-- end views-wrapper -->
+
+  </main>
+  </div>
+
+  <!-- User Profile Modal (Glassmorphism styled) -->
+  <div class="modal fade glass-modal" id="userModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content p-4">
+        <div class="modal-header border-0 pb-0 justify-content-center position-relative">
+          <button type="button" class="btn-close position-absolute top-0 end-0 me-3 mt-3" data-bs-dismiss="modal"
+            aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center">
+          <img id="modal-user-photo" src="images/user-default.png" alt="Profile" class="rounded-circle mb-3 shadow"
+            style="width:90px;height:90px; border: 3px solid var(--accent-cyan); object-fit: cover;" />
+          <h4 id="modal-user-name" class="text-white mb-1">Not signed in</h4>
+          <p id="modal-user-email" class="text-muted mb-4 small"></p>
+
+          <button id="login-btn" class="btn btn-primary w-100 py-3 mb-3">
+            <i class="fab fa-google me-2"></i>Sign in with Google
+          </button>
+          <button id="logout-btn" class="btn btn-outline-danger w-100 py-2" style="display:none;">
+            Log Out
+          </button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Load JS -->
   <script src="firebase-config.js"></script>
-  <script src="main.js"></script>
+  <script src="main.js?v=3"></script>
+  <script type="module" src="js/ai.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Sidebar Navigation Script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const navBtns = document.querySelectorAll('.nav-item-btn');
+      const tabPanes = document.querySelectorAll('.tab-pane');
+      const pageTitle = document.getElementById('current-page-title');
+      const sidebar = document.getElementById('sidebar');
+      const mobileToggle = document.getElementById('mobile-nav-toggle');
+
+      // Setup mobile toggle
+      mobileToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('show');
+      });
+
+      // Close sidebar when clicking outside on mobile
+      document.addEventListener('click', (e) => {
+        if (window.innerWidth < 992 &&
+          !sidebar.contains(e.target) &&
+          !mobileToggle.contains(e.target) &&
+          sidebar.classList.contains('show')) {
+          sidebar.classList.remove('show');
+        }
+      });
+
+      // Function to activate a specific tab
+      function activateTab(targetId) {
+        let found = false;
+
+        navBtns.forEach(btn => {
+          if (btn.getAttribute('data-target') === targetId) {
+            found = true;
+
+            // Remove active class from all buttons and panes
+            navBtns.forEach(b => b.classList.remove('active'));
+            tabPanes.forEach(p => p.classList.remove('active'));
+
+            // Add active class to clicked button
+            btn.classList.add('active');
+
+            // Add active class to target pane
+            const targetPane = document.querySelector(targetId);
+            if (targetPane) {
+              targetPane.classList.add('active');
+            }
+
+            // Update page title text excluding icon
+            let text = "";
+            for (let node of btn.childNodes) {
+              if (node.nodeType === 3) {
+                text += node.textContent;
+              }
+            }
+            pageTitle.textContent = text.trim();
+          }
+        });
+
+        // Close sidebar on mobile after selection
+        if (window.innerWidth < 992 && found) {
+          sidebar.classList.remove('show');
+        }
+
+        return found;
+      }
+
+      // Add click listeners to buttons to update hash
+      navBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const targetId = btn.getAttribute('data-target');
+          window.location.hash = targetId;
+        });
+      });
+
+      // Handle browser back/forward and hash changes
+      window.addEventListener('hashchange', () => {
+        const hash = window.location.hash || '#dashboard';
+        if (!activateTab(hash)) {
+          activateTab('#dashboard'); // Fallback to dashboard if hash is invalid
+        }
+      });
+
+      // Handle initial page load
+      const initialHash = window.location.hash || '#dashboard';
+      if (!activateTab(initialHash)) {
+        activateTab('#dashboard');
+      }
+    });
+  </script>
 </body>
 
 </html>

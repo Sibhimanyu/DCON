@@ -25,6 +25,16 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/getSmartRecommendation",
+        "function": "getSmartRecommendation"
+      },
+      {
+        "source": "/api/fetchIrrigationDataOnDemand",
+        "function": "fetchIrrigationDataOnDemand"
+      }
     ]
   },
   "emulators": {

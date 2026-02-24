@@ -1,0 +1,163 @@
+esphome:
+  name: fertigation
+  friendly_name: Fertigation
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: "G4/43bJo7CQ22JqozW2KUd82k/YN9kAnx2C4Mu6BTAQ="
+
+ota:
+  - platform: esphome
+    password: "588261dfd1896f7f3fcc7975dc274845"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Fertigation Fallback Hotspot"
+    password: "kjJHYImyFykZ"
+
+captive_portal:
+
+# ---------------------------
+# HTTP component MUST be before script
+# ---------------------------
+http_request:
+  useragent: esphome-device
+  timeout: 10s
+  verify_ssl: false
+
+# ---------------------------
+# GLOBALS
+# ---------------------------
+globals:
+  - id: motor_state
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+  - id: database_secret
+    type: std::string
+    initial_value: !secret rtdb_secret
+
+# ---------------------------
+# SCRIPT
+# ---------------------------
+script:
+  - id: sync_to_rtdb
+    parameters:
+      state: bool
+    then:
+      - http_request.send:
+          method: PUT
+          url: !lambda |-
+            return (std::string("https://mobitech-c93c0-default-rtdb.firebaseio.com/devices/MCON874Q000568.json?auth=") + id(database_secret)).c_str();
+          request_headers:
+            Content-Type: application/json
+          body: !lambda |-
+            if (state) {
+              return std::string("{\"motorState\": true}");
+            } else {
+              return std::string("{\"motorState\": false}");
+            }
+      - logger.log:
+          format: "RTDB Sync -> motorState = %s"
+          args: [ 'state ? "true" : "false"' ]
+
+# ---------------------------
+# UART
+# ---------------------------
+uart:
+  tx_pin: 17
+  rx_pin: 16
+  baud_rate: 9600
+  stop_bits: 2
+
+# ---------------------------
+# SENSOR
+# ---------------------------
+sensor:
+  - platform: pzemac
+    update_interval: 10s
+
+    current:
+      name: "PZEM Current"
+      id: pzem_current
+
+      filters:
+        - sliding_window_moving_average:
+            window_size: 5
+            send_every: 1
+
+      on_value:
+        then:
+          # ON detection
+          - if:
+              condition:
+                lambda: |-
+                  if (!id(pzem_current).has_state()) return false;
+                  return id(pzem_current).state > 0.7f;
+              then:
+                - if:
+                    condition:
+                      lambda: 'return id(motor_state) == false;'
+                    then:
+                      - globals.set:
+                          id: motor_state
+                          value: 'true'
+                      - script.execute:
+                          id: sync_to_rtdb
+                          state: true
+
+          # OFF detection
+          - if:
+              condition:
+                lambda: |-
+                  if (!id(pzem_current).has_state()) return false;
+                  return id(pzem_current).state < 0.3f;
+              then:
+                - if:
+                    condition:
+                      lambda: 'return id(motor_state) == true;'
+                    then:
+                      - globals.set:
+                          id: motor_state
+                          value: 'false'
+                      - script.execute:
+                          id: sync_to_rtdb
+                          state: false
+
+    voltage:
+      name: "PZEM Voltage"
+
+    power:
+      name: "PZEM Power"
+
+    energy:
+      name: "PZEM Energy"
+
+    frequency:
+      name: "PZEM Frequency"
+
+    power_factor:
+      name: "PZEM Power Factor"
+
+# ---------------------------
+# Heartbeat
+# ---------------------------
+interval:
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(pzem_current).has_state();'
+          then:
+            - script.execute:
+                id: sync_to_rtdb
+                state: !lambda 'return id(pzem_current).state > 0.5f;'
