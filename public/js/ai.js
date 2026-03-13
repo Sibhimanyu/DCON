@@ -31,6 +31,24 @@ document.addEventListener("DOMContentLoaded", () => {
                             }
                         }
                     }
+                },
+                {
+                    name: "start_manual_watering",
+                    description: "Starts watering manually for a predefined valve group with a specified duration in minutes. This is for WATERING ONLY, not fertigation.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            valve_group_name: {
+                                type: "string",
+                                description: "The exact name of the predefined valve group to activate."
+                            },
+                            duration_minutes: {
+                                type: "number",
+                                description: "Duration in minutes to run the valve group (e.g., 15, 30, 60)."
+                            }
+                        },
+                        required: ["valve_group_name", "duration_minutes"]
+                    }
                 }
             ]
         }
@@ -57,19 +75,22 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             // System instruction for the AI model
-            const SYSTEM_INSTRUCTION = `You are DCON AI, an expert irrigation assistant. Help farmers analyze their fertigation system efficiently.
+            const SYSTEM_INSTRUCTION = `You are DCON AI, an expert irrigation assistant. Help farmers analyze and control their fertigation system efficiently.
 
 PREDEFINED VALVE GROUPS:
 ${getGroupsListText()}
 
 ROLE:
-1. You are purely informational. You can analyze data and provide insights.
-2. You CANNOT add valves to the queue or change any system state.
-3. If the user asks to "water" or "add to queue", explain that you are an analysis assistant and they should select the "Suggested" group in the "Valve Queue" on the fertigation tab for automated scheduling based on staleness.
+1. You analyze data, provide logistic reports, and can control manual mode watering.
+2. You DO NOT add valves to the automated queue, and you DO NOT control fertigation.
+3. If the user asks for a system report, rely on 'get_live_status' to give detailed information including pressure, voltage, and current.
+4. If the user asks to manually turn on/water a valve group, use the 'start_manual_watering' tool. This only works with the EXACT names of predefined valve groups. It will ask the user for confirmation.
 
 BEHAVIOR RULES:
-1. ALWAYS call 'get_live_status' FIRST for any question about "status", "history", or "analysis".
-2. Be concise, actionable, and professional.`;
+1. ALWAYS call 'get_live_status' FIRST for any question about "status", "history", or "analysis", then format the data clearly in a logistic report.
+2. ALWAYS verify the exact PREDEFINED VALVE GROUP name before calling 'start_manual_watering'.
+3. HIGHEST PRIORITY FORMATTING: Always present data (like sensor readings, timer history, logs) using rich Markdown formatting. Use **Markdown Tables** extensively for structured data to ensure it renders beautifully in the dashboard UI.
+4. Be concise, actionable, and professional.`;
 
             // Create a `GenerativeModel` instance with gemini-3-flash-preview
             const ai = getAI(app, { backend: new GoogleAIBackend() });
@@ -244,7 +265,18 @@ BEHAVIOR RULES:
                 ? ` | Current Timer: ${timers.current.name} (${timers.current.remaining_time} min remaining)`
                 : " | System Status: Idle";
 
-            return `Motor running: ${motorRunning ? "Yes" : "No"} | Active valves: ${activeStr} | Fertigation active: ${fertActive}${timerInfo}`;
+            const pIn = live.pressure_in || "N/A";
+            const pOut = live.pressure_out || "N/A";
+            const v1 = live.voltage_phase_1 || "N/A";
+            const v2 = live.voltage_phase_2 || "N/A";
+            const v3 = live.voltage_phase_3 || "N/A";
+            const c1 = live.current_phase_1 || "N/A";
+            const c2 = live.current_phase_2 || "N/A";
+            const c3 = live.current_phase_3 || "N/A";
+
+            const detailedTelemetry = ` | Pressure In: ${pIn} bar, Out: ${pOut} bar | Voltage: L1 ${v1}V, L2 ${v2}V, L3 ${v3}V | Current: L1 ${c1}A, L2 ${c2}A, L3 ${c3}A`;
+
+            return `Motor running: ${motorRunning ? "Yes" : "No"} | Active valves: ${activeStr} | Fertigation active: ${fertActive}${timerInfo}${detailedTelemetry}`;
         } catch (e) {
             console.error("fetchCurrentValveStatus error:", e);
             return "Could not fetch live valve status.";
@@ -272,6 +304,53 @@ BEHAVIOR RULES:
                 available_groups: getGroupsListText()
             };
         }
+
+        if (name === "start_manual_watering") {
+            const groupName = args?.valve_group_name;
+            const duration = args?.duration_minutes;
+
+            // Add custom verification using the browser's confirm dialog
+            const isConfirmed = window.confirm(`SECURITY VERIFICATION:\n\nThe AI Assistant is requesting to activate the valve group '${groupName}' for ${duration} minutes in Manual Watering Mode.\n\nDo you want to proceed?`);
+
+            if (!isConfirmed) {
+                return { status: "cancelled", message: "User denied the manual activation. Tell the user you cannot proceed without their confirmation." };
+            }
+
+            try {
+                const response = await fetch("/api/switchManualMode", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ valveGroupName: groupName, durationMinutes: duration })
+                });
+
+                const contentType = response.headers.get("content-type");
+                let errorData = {};
+                let result = {};
+
+                if (contentType && contentType.includes("application/json")) {
+                    if (!response.ok) {
+                        errorData = await response.json();
+                    } else {
+                        result = await response.json();
+                    }
+                } else {
+                    const text = await response.text();
+                    if (!response.ok) {
+                        return { status: "error", message: `Server returned non-JSON error (${response.status}): ${text.substring(0, 100)}... Please ensure your local server is restarted or the endpoint URL is correct.` };
+                    }
+                    result = { message: text };
+                }
+
+                if (!response.ok) {
+                    return { status: "error", message: `Failed to activate manual watering mode: ${errorData.error || response.statusText}` };
+                }
+
+                return { status: "success", message: `Manual watering mode activated for ${groupName} for ${duration} minutes. Server response: ${result.message}` };
+            } catch (error) {
+                return { status: "error", message: `Network error while activating manual watering mode: ${error.message}` };
+            }
+        }
+
         return { error: "Unknown tool" };
     }
 
@@ -289,7 +368,8 @@ BEHAVIOR RULES:
         chatInput.disabled = true;
         sendBtn.disabled = true;
 
-        const loadingId = addMessage("Thinking...", "ai", true);
+        const typingHtml = `<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>`;
+        const loadingId = addMessage(typingHtml, "ai", true);
 
         try {
             // Send user message
@@ -331,30 +411,80 @@ BEHAVIOR RULES:
     // UI helpers
     // ——————————————————————————————————————
 
+    // ——————————————————————————————————————
+    // UI helpers: Lightweight Native Markdown Parser
+    // ——————————————————————————————————————
+
     function formatText(raw) {
-        return raw
-            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\*(.*?)\*/g, "<em>$1</em>")
-            .replace(/`(.*?)`/g, "<code class='inline-code'>$1</code>")
-            .replace(/\n/g, "<br>");
+        const slots = [];
+
+        // Step 1a: Extract markdown TABLES before any escaping
+        let result = raw.replace(/(\|[^\n]+\|\r?\n)(\|(?:[\s:]*-+[\s:]*\|)+\r?\n)((?:\|[^\n]+\|\r?\n?)+)/g,
+            (match, headerRow, divider, bodyRows) => {
+                const extractCells = (row) => row.split('|').map(s => s.trim()).filter(Boolean);
+                const applyBold = (s) => s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                const headers = extractCells(headerRow);
+                const rows = bodyRows.trim().split('\n').map(extractCells);
+                const thead = `<tr>${headers.map(h => `<th>${applyBold(escapeHtml(h))}</th>`).join('')}</tr>`;
+                const tbody = rows.map(r => `<tr>${r.map(c => `<td>${applyBold(escapeHtml(c))}</td>`).join('')}</tr>`).join('');
+                const html = `<div class="table-responsive my-3">
+                    <table class="table table-dark table-hover table-striped table-bordered text-center align-middle" style="background:rgba(0,0,0,0.3);border-color:rgba(255,255,255,0.1);">
+                        <thead style="background:rgba(255,255,255,0.05);">${thead}</thead>
+                        <tbody>${tbody}</tbody>
+                    </table></div>`;
+                const idx = slots.length; slots.push(html);
+                return `\x00SLOT${idx}\x00`;
+            }
+        );
+
+        // Step 1b: Extract HEADINGS before escaping
+        result = result.replace(/^(#{1,3})\s+(.+)$/gm, (match, hashes, content) => {
+            const tag = hashes.length === 1 ? 'h4' : hashes.length === 2 ? 'h5' : 'h6';
+            const html = `<${tag} class="mt-3 mb-1 fw-bold text-info">${escapeHtml(content)}</${tag}>`;
+            const idx = slots.length; slots.push(html);
+            return `\x00SLOT${idx}\x00`;
+        });
+
+        // Step 2: Escape ALL remaining plain text
+        result = escapeHtml(result);
+
+        // Step 3: Restore slots (tables + headings)
+        result = result.replace(/\x00SLOT(\d+)\x00/g, (_, i) => slots[i]);
+
+        // Step 4: Bold
+        result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // Step 5: Inline code
+        result = result.replace(/`(.*?)`/g, '<code class="bg-dark text-light px-1 rounded border border-secondary">$1</code>');
+
+        // Step 6: Newlines to <br>
+        result = result.replace(/\n/g, '<br/>');
+
+        return result;
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function addMessage(text, type, isLoading = false) {
         const id = "msg-" + Date.now();
         const div = document.createElement("div");
         div.id = id;
-        const formattedText = type === "system" ? text : formatText(text);
+
+        // System/loading text doesn't need markdown parsing
+        const formattedText = type === "system" || isLoading ? text : formatText(text);
 
         if (type === "user") {
-            div.className = "ai-message d-flex gap-3 align-items-start align-self-end flex-row-reverse";
+            div.className = "ai-message d-flex gap-3 align-items-start align-self-end flex-row-reverse max-w-75";
             div.innerHTML = `
-                <div class="msg-avatar user-avatar"><i class="fas fa-user"></i></div>
-                <div class="msg-bubble user-bubble">${formattedText}</div>`;
+                <div class="msg-avatar user-avatar flex-shrink-0 d-flex justify-content-center align-items-center rounded-circle bg-secondary text-white" style="width:36px;height:36px;"><i class="fas fa-user" style="font-size:14px;"></i></div>
+                <div class="msg-bubble user-bubble p-3 rounded-4 text-light" style="border-top-right-radius:6px!important;line-height:1.6;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">${formattedText}</div>`;
         } else if (type === "ai") {
-            div.className = "ai-message d-flex gap-3 align-items-start";
+            div.className = "ai-message d-flex gap-3 align-items-start max-w-75";
             div.innerHTML = `
-                <div class="msg-avatar ai-avatar"><i class="fas ${isLoading ? "fa-spinner fa-spin" : "fa-robot"}"></i></div>
-                <div class="msg-bubble ai-bubble">${formattedText}</div>`;
+                <div class="msg-avatar ai-avatar flex-shrink-0 d-flex justify-content-center align-items-center rounded-circle text-white" style="width:36px;height:36px;background:linear-gradient(135deg,#06b6d4,#6366f1);"><i class="fas ${isLoading ? "fa-spinner fa-spin" : "fa-robot"}" style="font-size:14px;"></i></div>
+                <div class="msg-bubble ai-bubble flex-grow-1 p-3 rounded-4 text-light w-100 markdown-body" style="border-top-left-radius:6px!important;line-height:1.6;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08); overflow-x: auto; font-family: var(--font-primary); ${isLoading ? 'padding: 8px 16px !important;' : ''}">${formattedText}</div>`;
         } else {
             div.className = "w-100 text-center my-2";
             div.innerHTML = `<span class="text-muted small">${formattedText}</span>`;

@@ -591,6 +591,85 @@ exports.stopFertigation = onRequest((req, res) => {
   });
 });
 
+// Switch Manual Mode (HTTP)
+exports.switchManualMode = onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      let { valveGroupName, durationMinutes } = req.body;
+      if (!valveGroupName || !durationMinutes) {
+        return res.status(400).json({ success: false, error: "Missing valveGroupName or durationMinutes" });
+      }
+      durationMinutes = parseInt(durationMinutes, 10);
+      if (isNaN(durationMinutes) || durationMinutes <= 0) {
+        return res.status(400).json({ success: false, error: "durationMinutes must be a valid positive number" });
+      }
+
+      // 1. Fetch valve group
+      const groupsSnapshot = await db.collection("irrigation_devices")
+        .doc(config.DEVICE_ID)
+        .collection("valve_groups")
+        .where("name", "==", valveGroupName)
+        .limit(1)
+        .get();
+
+      if (groupsSnapshot.empty) {
+        return res.status(404).json({ success: false, error: "Valve group not found" });
+      }
+
+      const valveGroup = groupsSnapshot.docs[0].data();
+      if (!valveGroup.valves || valveGroup.valves.length === 0) {
+        return res.status(400).json({ success: false, error: "Valve group is empty" });
+      }
+
+      // 2. Send command
+      const valveIds = valveGroup.valves.map((v) => v.id.toString().padStart(3, "0")).join(",");
+      const hours = Math.floor(durationMinutes / 60).toString().padStart(2, "0");
+      const mins = (durationMinutes % 60).toString().padStart(2, "0");
+      const command = `V${valveIds}ON ${hours} ${mins}@A8`;
+      const startTime = new Date();
+
+      await axios.post(
+        "https://dcon.mobitechwireless.com/v1/command/",
+        { command, device_id: "12043" },
+        {
+          headers: {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "authorization": config.DEVICE_TOKEN,
+          },
+          maxRedirects: 5,
+        },
+      );
+
+      // 3. Notify Zoho
+      try {
+        const valveNamesList = valveGroup.valves.map((v) => v.name).join(", ");
+        const startIst = startTime.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, dateStyle: "medium", timeStyle: "short" });
+        await axios.post(
+          `${config.ZOHO_CLIQ_WEBHOOK}?zapikey=${config.ZOHO_CLIQ_API_KEY}`,
+          {
+            text: [
+              `🤖🚰 *AI Manual Watering Activated*`,
+              `💧 Group: *${valveGroup.name}*`,
+              `🪴 Valves: ${valveNamesList}`,
+              `⏱️ Duration: ${durationMinutes} mins`,
+              `⏰ Time: ${startIst}`,
+              `📟 Device: ${config.DEVICE_ID}`,
+            ].join("\n"),
+          },
+        );
+      } catch (notifyErr) {
+        console.error("Failed to notify Zoho Cliq (manual watering):", notifyErr.message);
+      }
+
+      return res.json({ success: true, message: `Activated manual watering for ${valveGroupName}`, command });
+    } catch (err) {
+      console.error("Error in switchManualMode:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+});
+
 // Test Command Function
 exports.testCommand = onRequest((req, res) => {
   cors(req, res, async () => {

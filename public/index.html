@@ -71,11 +71,14 @@
         <button class="nav-item-btn active" data-target="#dashboard">
           <i class="fas fa-home"></i> Dashboard
         </button>
+        <button class="nav-item-btn" data-target="#supply-motor">
+          <i class="fas fa-microchip"></i> Supply Motor
+        </button>
         <button class="nav-item-btn" data-target="#energy-analytics">
           <i class="fas fa-bolt"></i> Energy Analytics
         </button>
         <button class="nav-item-btn" data-target="#pressure-analysis">
-          <i class="fas fa-water"></i> Pressure & Flow
+          <i class="fas fa-water"></i> Pressure
         </button>
         <button class="nav-item-btn" data-target="#fertigation-logs">
           <i class="fas fa-leaf"></i> Fertigation
@@ -248,7 +251,187 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
+        <!-- SUPPLY MOTOR VIEW -->
+        <div class="tab-pane" id="supply-motor">
+          <div class="row gy-4">
+
+            <!-- Flow Diagram Header -->
+            <div class="col-12 text-center my-3">
+              <h4 class="text-white d-inline-block border-bottom pb-2 mb-4"
+                style="border-color: var(--accent-cyan) !important;">
+                Water Supply Flow
+              </h4>
+              <div class="d-none d-md-flex justify-content-center align-items-center gap-4 text-muted small fw-bold"
+                style="letter-spacing: 1px;">
+                <div class="px-3 py-2 rounded-pill"
+                  style="background: rgba(45, 212, 191, 0.1); color: var(--accent-emerald);">RIVER</div>
+                <i class="fas fa-arrow-right fs-5" style="color: var(--accent-cyan);"></i>
+                <div class="px-3 py-2 rounded-pill" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">SUPPLY
+                  WELL</div>
+                <i class="fas fa-arrow-right fs-5" style="color: var(--accent-cyan);"></i>
+                <div class="px-3 py-2 rounded-pill" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">MAIN
+                  FARM WELL</div>
+              </div>
+            </div>
+
+            <!-- Flow Cards Container (Side-by-side on Desktop) -->
+            <div class="col-12">
+              <div class="row align-items-stretch gy-4">
+
+                <!-- 1. River Pump (Source) -->
+                <div class="col-12 col-md-5">
+                  <div class="card overflow-hidden h-100" style="border: 1px solid rgba(45, 212, 191, 0.1);">
+                    <div class="card-header border-0 text-center pt-4 pb-0 bg-transparent">
+                      <h5 class="m-0" style="color: var(--accent-emerald);">River Pump</h5>
+                      <p class="small text-muted mb-0">River ➔ Supply Well</p>
+                    </div>
+                    <div class="card-body p-0 d-flex flex-column">
+                      <div id="supply-motor2-status-banner"
+                        class="p-4 text-center d-flex flex-column align-items-center justify-content-center flex-grow-1"
+                        style="transition: all 0.5s ease;">
+                        <div class="status-indicator mb-3">
+                          <div id="supply-motor2-dot" class="status-dot inactive m-0"></div>
+                          <span id="supply-motor2-status-text" class="ms-2">Loading...</span>
+                        </div>
+                        <img id="supply-motor2-image" src="images/motor-off.png" alt="River Pump" class="dash-img"
+                          style="width: 140px;">
+                        <p id="supply-motor2-desc" class="text-muted mt-3 mb-0 small">Fetching status...</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Visual Arrow connecting them (Desktop right, Mobile down) -->
+                <div class="col-12 col-md-2 d-flex justify-content-center align-items-center">
+                  <div class="d-none d-md-block">
+                    <i class="fas fa-water fs-1"
+                      style="color: var(--accent-cyan); filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.5));"></i>
+                  </div>
+                  <div class="d-block d-md-none text-center w-100 py-2">
+                    <i class="fas fa-arrow-down fs-3" style="color: var(--accent-cyan);"></i>
+                  </div>
+                </div>
+
+                <!-- 2. Transfer Pump (Primary) -->
+                <div class="col-12 col-md-5">
+                  <div class="card overflow-hidden h-100" style="border: 1px solid rgba(59, 130, 246, 0.1);">
+                    <div class="card-header border-0 text-center pt-4 pb-0 bg-transparent">
+                      <h5 class="m-0" style="color: #3b82f6;">Transfer Pump</h5>
+                      <p class="small text-muted mb-0">Supply Well ➔ Main Well</p>
+                    </div>
+                    <div class="card-body p-0 d-flex flex-column">
+                      <div id="supply-motor-status-banner"
+                        class="p-4 text-center d-flex flex-column align-items-center justify-content-center flex-grow-1"
+                        style="transition: all 0.5s ease;">
+                        <div class="status-indicator mb-3">
+                          <div id="supply-motor-dot" class="status-dot inactive m-0"></div>
+                          <span id="supply-motor-status-text" class="ms-2">Loading...</span>
+                        </div>
+                        <img id="supply-motor-image" src="images/motor-off.png" alt="Transfer Pump" class="dash-img"
+                          style="width: 140px;">
+                        <p id="supply-motor-desc" class="text-muted mt-3 mb-0 small">Fetching status...</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Detailed Info Row (Stacked below diagram) -->
+            <div class="col-12 mt-5">
+              <h5 class="text-white mb-3">Diagnostic Information</h5>
+              <div class="row gy-4">
+
+                <!-- River Pump Diagnostics -->
+                <div class="col-md-6">
+                  <div class="card h-100" style="background: rgba(45, 212, 191, 0.02);">
+                    <div class="card-body">
+                      <h6 class="card-title text-muted mb-3"><i class="fas fa-microchip me-2"></i>River Pump Details
+                      </h6>
+                      <div class="d-flex flex-column gap-3">
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Power / Phase</span>
+                          <span id="sm2-phase" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Runtime</span>
+                          <span id="sm2-runtime" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Motor Status</span>
+                          <span id="sm2-motor-status" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Last Telemetry</span>
+                          <span id="sm2-last-connect" class="small text-end fw-bold" style="max-width: 60%">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Operation Mode</span>
+                          <span id="sm2-op-mode" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Network</span>
+                          <span id="sm2-network" class="fw-bold fs-6">--</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Transfer Pump Diagnostics -->
+                <div class="col-md-6">
+                  <div class="card h-100" style="background: rgba(59, 130, 246, 0.02);">
+                    <div class="card-body">
+                      <h6 class="card-title text-muted mb-3"><i class="fas fa-microchip me-2"></i>Transfer Pump Details
+                      </h6>
+                      <div class="d-flex flex-column gap-3">
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Device Name</span>
+                          <span id="sm-device-name" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Status Message</span>
+                          <span id="sm-msg-desc" class="fw-bold fs-6 text-end" style="max-width: 60%">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Motor Status</span>
+                          <span id="sm-motor-status" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Last Activity</span>
+                          <span id="sm-latest-msg" class="small text-end fw-bold" style="max-width: 60%">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between border-bottom border-light pb-2"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Operation Mode</span>
+                          <span id="sm-op-mode" class="fw-bold fs-6">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between"
+                          style="border-color: rgba(255,255,255,0.05) !important;">
+                          <span class="text-muted small">Sim Number</span>
+                          <span id="sm-sim-number" class="fw-bold fs-6">--</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           </div>
         </div>
 
@@ -269,6 +452,7 @@
                       <button id="fetch-energy-btn" class="btn btn-primary btn-sm px-3">Load</button>
                     </div>
                   </div>
+
                   <div class="chart-container" style="height: 480px;">
                     <canvas id="power-analytics-chart"></canvas>
                   </div>
@@ -334,242 +518,241 @@
                 </div>
               </div>
             </div>
-
           </div>
-
-
-
         </div>
-      </div>
 
-      <!-- 4. FERTIGATION LOGS VIEW -->
-      <div class="tab-pane" id="fertigation-logs">
-        <div class="row gy-4">
+        <!-- 4. FERTIGATION LOGS VIEW -->
+        <div class="tab-pane" id="fertigation-logs">
+          <div class="row gy-4">
 
-          <div class="col-12">
-            <div class="card">
-              <div class="card-body">
-                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
-                  <h5 class="card-title m-0">Fertigation Duration Overview</h5>
-                  <div class="d-flex align-items-center gap-3">
-                    <div class="d-flex align-items-center gap-2">
-                      <label for="fert-chart-from-date" class="text-muted mb-0 small">From</label>
-                      <input type="date" id="fert-chart-from-date" class="form-control form-control-sm"
-                        style="max-width: 140px;">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
+                    <h5 class="card-title m-0">Fertigation Duration Overview</h5>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="fert-chart-from-date" class="text-muted mb-0 small">From</label>
+                        <input type="date" id="fert-chart-from-date" class="form-control form-control-sm"
+                          style="max-width: 140px;">
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="fert-chart-to-date" class="text-muted mb-0 small">To</label>
+                        <input type="date" id="fert-chart-to-date" class="form-control form-control-sm"
+                          style="max-width: 140px;">
+                      </div>
+                      <button id="update-fert-charts-btn" class="btn btn-primary btn-sm px-3">Update</button>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                      <label for="fert-chart-to-date" class="text-muted mb-0 small">To</label>
-                      <input type="date" id="fert-chart-to-date" class="form-control form-control-sm"
-                        style="max-width: 140px;">
-                    </div>
-                    <button id="update-fert-charts-btn" class="btn btn-primary btn-sm px-3">Update</button>
+                  </div>
+                  <div class="chart-container" style="height: 280px;">
+                    <canvas id="fertigation-duration-chart"></canvas>
                   </div>
                 </div>
-                <div class="chart-container" style="height: 280px;">
-                  <canvas id="fertigation-duration-chart"></canvas>
-                </div>
               </div>
             </div>
-          </div>
 
-          <div class="col-12">
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title mb-3">Fertigation Valve Usage</h5>
-                <div class="chart-container" style="height: 380px;">
-                  <canvas id="fertigation-valve-stats-chart"></canvas>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-lg-4">
-            <div class="card h-100">
-              <div class="card-body">
-                <h5 class="card-title border-bottom border-secondary pb-3 mb-4">Valve Queue</h5>
-                <div id="valve-group-queue-controls" class="mb-4 text-center">
-                  <button id="add-valve-group-btn" class="btn btn-outline-primary w-100 mb-2 py-2">
-                    <i class="fas fa-plus-circle me-2"></i>Add Valves to Queue
-                  </button>
-                  <p class="text-muted small">Select multiple valves using the modal interface.</p>
-                </div>
-                <h6 class="text-white mt-4 border-bottom border-secondary pb-2">Current Order:</h6>
-                <ul id="valve-group-queue-list" class="list-group list-group-flush mb-3 bg-transparent"></ul>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-lg-8">
-            <div class="card h-100">
-              <div class="card-body">
-                <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
-                  style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-                  <h5 class="card-title m-0">Tank History</h5>
-                  <div class="d-flex align-items-center gap-3">
-                    <div class="d-flex align-items-center gap-2">
-                      <label for="fert-history-from-date" class="text-muted mb-0 small">From</label>
-                      <input type="date" id="fert-history-from-date" class="form-control form-control-sm"
-                        style="max-width: 140px;">
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                      <label for="fert-history-to-date" class="text-muted mb-0 small">To</label>
-                      <input type="date" id="fert-history-to-date" class="form-control form-control-sm"
-                        style="max-width: 140px;">
-                    </div>
-                    <button id="fetch-fert-history-btn" class="btn btn-primary btn-sm px-3">Fetch</button>
+            <div class="col-12">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title mb-3">Fertigation Valve Usage</h5>
+                  <div class="chart-container" style="height: 380px;">
+                    <canvas id="fertigation-valve-stats-chart"></canvas>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <div class="table-responsive">
-                  <table class="table table-hover">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Duration</th>
-                        <th>Active Timers</th>
-                        <th>Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody id="fertigation-history">
-                      <!-- Filled by JS -->
-                    </tbody>
-                  </table>
+            <div class="col-lg-4">
+              <div class="card h-100">
+                <div class="card-body">
+                  <h5 class="card-title border-bottom border-secondary pb-3 mb-4">Valve Queue</h5>
+                  <div id="valve-group-queue-controls" class="mb-4 text-center">
+                    <button id="add-valve-group-btn" class="btn btn-outline-primary w-100 mb-2 py-2">
+                      <i class="fas fa-plus-circle me-2"></i>Add Valves to Queue
+                    </button>
+                    <p class="text-muted small">Select multiple valves using the modal interface.</p>
+                  </div>
+                  <h6 class="text-white mt-4 border-bottom border-secondary pb-2">Current Order:</h6>
+                  <ul id="valve-group-queue-list" class="list-group list-group-flush mb-3 bg-transparent"></ul>
                 </div>
-                <div class="text-center mt-4">
-                  <button id="load-more-fert-btn" class="btn btn-outline-primary px-4 py-2" style="display: none;">View
-                    Older Logs</button>
+              </div>
+            </div>
+
+            <div class="col-lg-8">
+              <div class="card h-100">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+                    style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                    <h5 class="card-title m-0">Tank History</h5>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="fert-history-from-date" class="text-muted mb-0 small">From</label>
+                        <input type="date" id="fert-history-from-date" class="form-control form-control-sm"
+                          style="max-width: 140px;">
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <label for="fert-history-to-date" class="text-muted mb-0 small">To</label>
+                        <input type="date" id="fert-history-to-date" class="form-control form-control-sm"
+                          style="max-width: 140px;">
+                      </div>
+                      <button id="fetch-fert-history-btn" class="btn btn-primary btn-sm px-3">Fetch</button>
+                    </div>
+                  </div>
+
+                  <div class="table-responsive">
+                    <table class="table table-hover">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Duration</th>
+                          <th>Active Timers</th>
+                          <th>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody id="fertigation-history">
+                        <!-- Filled by JS -->
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="text-center mt-4">
+                    <button id="load-more-fert-btn" class="btn btn-outline-primary px-4 py-2"
+                      style="display: none;">View
+                      Older Logs</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 5. TIMER HISTORY VIEW -->
+        <div class="tab-pane" id="timer-history">
+          <div class="card">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+                style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                <div class="d-flex flex-wrap align-items-center gap-4">
+                  <div class="d-flex align-items-center gap-2">
+                    <label for="history-from-date" class="text-muted mb-0 small text-uppercase">From</label>
+                    <input type="date" id="history-from-date" class="form-control" style="max-width: 150px;">
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <label for="history-to-date" class="text-muted mb-0 small text-uppercase">To</label>
+                    <input type="date" id="history-to-date" class="form-control" style="max-width: 150px;">
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <label for="history-timer-name-dropdown" class="text-muted mb-0 small text-uppercase">Timer
+                      Name</label>
+                    <select id="history-timer-name-dropdown" class="form-select" style="max-width: 200px;">
+                      <option value="">All Timers</option>
+                    </select>
+                  </div>
+                </div>
+                <button id="fetch-history-btn" class="btn btn-primary px-4 py-2">Fetch Logs</button>
+              </div>
+              <div id="timer-history-content" class="mt-4">
+                <div class="text-center py-5 text-muted">
+                  <i class="fas fa-file-alt fs-1 mb-3 opacity-50"></i><br>
+                  Select filters to load timer history.
                 </div>
               </div>
             </div>
           </div>
-
-        </div>
-      </div>
-
-      <!-- 5. TIMER HISTORY VIEW -->
-      <div class="tab-pane" id="timer-history">
-        <div class="card">
-          <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
-              style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-              <div class="d-flex flex-wrap align-items-center gap-4">
-                <div class="d-flex align-items-center gap-2">
-                  <label for="history-from-date" class="text-muted mb-0 small text-uppercase">From</label>
-                  <input type="date" id="history-from-date" class="form-control" style="max-width: 150px;">
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                  <label for="history-to-date" class="text-muted mb-0 small text-uppercase">To</label>
-                  <input type="date" id="history-to-date" class="form-control" style="max-width: 150px;">
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                  <label for="history-timer-name-dropdown" class="text-muted mb-0 small text-uppercase">Timer
-                    Name</label>
-                  <select id="history-timer-name-dropdown" class="form-select" style="max-width: 200px;">
-                    <option value="">All Timers</option>
-                  </select>
-                </div>
-              </div>
-              <button id="fetch-history-btn" class="btn btn-primary px-4 py-2">Fetch Logs</button>
-            </div>
-            <div id="timer-history-content" class="mt-4">
-              <div class="text-center py-5 text-muted">
-                <i class="fas fa-file-alt fs-1 mb-3 opacity-50"></i><br>
-                Select filters to load timer history.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 6. ADMIN PANEL VIEW -->
-      <div class="tab-pane" id="admin-panel">
-        <div class="card">
-          <div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
-              style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-              <h5 class="card-title m-0"><i class="fas fa-layer-group me-2"></i>Valve Group Configurations</h5>
-              <button class="btn btn-primary" onclick="openCreateValveGroupModal()">
-                <i class="fas fa-plus me-2"></i>Create Valve Group
-              </button>
-            </div>
-            <p class="text-muted small mb-4">
-              Predefined valve groups combine multiple valves into a single logical unit. Only these predetermined
-              groups can be added to the Active Fertigation Queue to ensure proper pressure regulation.
-            </p>
-            <div class="row gy-4" id="admin-valve-groups-grid">
-              <div class="col-12 text-center py-5 text-muted">
-                <i class="fas fa-spinner fa-spin fs-2 mb-3"></i><br>Loading configurations...
-              </div>
-            </div>
-          </div>
         </div>
 
-        <!-- AI Integrated Card -->
-        <div class="card mt-4">
-          <div class="card-body">
-            <div class="d-flex align-items-center mb-3 p-3 rounded-3"
-              style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-              <h5 class="card-title m-0"><i class="fas fa-robot me-2" style="color:var(--accent-teal);"></i>AI Assistant
-                Status</h5>
-            </div>
-            <p class="text-muted small mb-0">
-              The AI Assistant is integrated with Firebase AI Logic and the <strong
-                style="color:var(--accent-teal);">Gemini 3</strong> model.
-              No manual API key is required as it uses your secure Firebase project credentials.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 7. AI ASSISTANT VIEW -->
-      <div class="tab-pane" id="ai-assistant">
-        <div class="card h-100" style="min-height: 80vh;">
-          <div class="card-body d-flex flex-column p-0">
-            <!-- Header -->
-            <div class="d-flex align-items-center p-3 border-bottom"
-              style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05) !important;">
-              <h5 class="card-title m-0 d-flex align-items-center gap-2" style="color: var(--accent-cyan);">
-                <i class="fas fa-robot"></i> Gemini Assistant
-              </h5>
-            </div>
-
-            <!-- Chat Window -->
-            <div id="ai-chat-window" class="flex-grow-1 p-4 overflow-auto d-flex flex-column gap-3"
-              style="background: rgba(0,0,0,0.2);">
-              <!-- Welcome Message -->
-              <div class="ai-message d-flex gap-3 align-items-start max-w-75">
-                <div class="flex-shrink-0 d-flex justify-content-center align-items-center rounded-circle text-white"
-                  style="width:36px;height:36px;background:linear-gradient(135deg,#06b6d4,#6366f1);">
-                  <i class="fas fa-robot" style="font-size:14px;"></i>
-                </div>
-                <div class="p-3 rounded-4 text-light"
-                  style="border-top-left-radius:6px!important;line-height:1.6;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);">
-                  Hello! I am your AI assistant, powered by Gemini 3 and Firebase. I can check active valves, analyze
-                  fertigation history, and help you schedule your next run.
-                  How can I help you today?
-                </div>
-              </div>
-            </div>
-
-            <!-- Input Area -->
-            <div class="p-3 border-top"
-              style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05) !important;">
-              <form id="ai-chat-form" class="d-flex gap-2">
-                <input type="text" id="ai-chat-input" class="form-control bg-dark text-white border-secondary py-2"
-                  placeholder="Ask Gemini..." autocomplete="off" disabled>
-                <button type="submit" id="ai-chat-send-btn"
-                  class="btn btn-primary px-4 py-2 d-flex align-items-center gap-2" disabled>
-                  <i class="fas fa-paper-plane"></i> <span class="d-none d-md-inline">Send</span>
+        <!-- 6. ADMIN PANEL VIEW -->
+        <div class="tab-pane" id="admin-panel">
+          <div class="card">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+                style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                <h5 class="card-title m-0"><i class="fas fa-layer-group me-2"></i>Valve Group Configurations</h5>
+                <button class="btn btn-primary" onclick="openCreateValveGroupModal()">
+                  <i class="fas fa-plus me-2"></i>Create Valve Group
                 </button>
-              </form>
+              </div>
+              <p class="text-muted small mb-4">
+                Predefined valve groups combine multiple valves into a single logical unit. Only these predetermined
+                groups can be added to the Active Fertigation Queue to ensure proper pressure regulation.
+              </p>
+              <div class="row gy-4" id="admin-valve-groups-grid">
+                <div class="col-12 text-center py-5 text-muted">
+                  <i class="fas fa-spinner fa-spin fs-2 mb-3"></i><br>Loading configurations...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Integrated Card -->
+          <div class="card mt-4">
+            <div class="card-body">
+              <div class="d-flex align-items-center mb-3 p-3 rounded-3"
+                style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                <h5 class="card-title m-0"><i class="fas fa-robot me-2" style="color:var(--accent-teal);"></i>AI
+                  Assistant
+                  Status</h5>
+              </div>
+              <p class="text-muted small mb-0">
+                The AI Assistant is integrated with Firebase AI Logic and the <strong
+                  style="color:var(--accent-teal);">Gemini
+                  3</strong> model.
+                No manual API key is required as it uses your secure Firebase project credentials.
+              </p>
             </div>
           </div>
         </div>
-      </div>
 
-  </div> <!-- end views-wrapper -->
+        <!-- 7. AI ASSISTANT VIEW -->
+        <div class="tab-pane" id="ai-assistant">
+          <div class="card h-100" style="min-height: 80vh;">
+            <div class="card-body d-flex flex-column p-0">
+              <!-- Header -->
+              <div class="d-flex align-items-center p-3 border-bottom"
+                style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05) !important;">
+                <h5 class="card-title m-0 d-flex align-items-center gap-2" style="color: var(--accent-cyan);">
+                  <i class="fas fa-robot"></i> Gemini Assistant
+                </h5>
+              </div>
 
-  </main>
+              <!-- Chat Window -->
+              <div id="ai-chat-window" class="flex-grow-1 p-4 overflow-auto d-flex flex-column gap-3"
+                style="background: rgba(0,0,0,0.2);">
+                <!-- Welcome Message -->
+                <div class="ai-message d-flex gap-3 align-items-start max-w-75">
+                  <div class="flex-shrink-0 d-flex justify-content-center align-items-center rounded-circle text-white"
+                    style="width:36px;height:36px;background:linear-gradient(135deg,#06b6d4,#6366f1);">
+                    <i class="fas fa-robot" style="font-size:14px;"></i>
+                  </div>
+                  <div class="p-3 rounded-4 text-light"
+                    style="border-top-left-radius:6px!important;line-height:1.6;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);">
+                    Hello! I am your AI assistant, powered by Gemini 3 and Firebase. I can check active valves,
+                    analyze
+                    fertigation history, and help you schedule your next run.
+                    How can I help you today?
+                  </div>
+                </div>
+              </div>
+
+              <!-- Input Area -->
+              <div class="p-3 border-top"
+                style="background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05) !important;">
+                <form id="ai-chat-form" class="d-flex gap-2">
+                  <input type="text" id="ai-chat-input" class="form-control bg-dark text-white border-secondary py-2"
+                    placeholder="Ask Gemini..." autocomplete="off" disabled>
+                  <button type="submit" id="ai-chat-send-btn"
+                    class="btn btn-primary px-4 py-2 d-flex align-items-center gap-2" disabled>
+                    <i class="fas fa-paper-plane"></i> <span class="d-none d-md-inline">Send</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div> <!-- end views-wrapper -->
+
+    </main>
   </div>
 
   <!-- User Profile Modal (Glassmorphism styled) -->
@@ -599,8 +782,8 @@
 
   <!-- Load JS -->
   <script src="firebase-config.js"></script>
-  <script src="main.js?v=3"></script>
-  <script type="module" src="js/ai.js"></script>
+  <script src="main.js?v=4"></script>
+  <script type="module" src="js/ai.js?v=2"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
   <!-- Sidebar Navigation Script -->

@@ -34,6 +34,10 @@
       {
         "source": "/api/fetchIrrigationDataOnDemand",
         "function": "fetchIrrigationDataOnDemand"
+      },
+      {
+        "source": "/api/switchManualMode",
+        "function": "switchManualMode"
       }
     ]
   },

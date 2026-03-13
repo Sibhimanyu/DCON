@@ -621,6 +621,74 @@ function getTodayDate() {
     return new Date().toLocaleDateString('sv-SE');
 }
 
+/**
+ * Groups consecutive timer log entries that represent a single interrupted
+ * irrigation session into arrays.
+ *
+ * Rules (only group when the FIRST entry of a potential group has completed=0):
+ *  1. Backwash sandwich:
+ *     TimerA (completed=0) → Backwash → [TimerA optional]
+ *  2. Gap resume (same timer, short gap ≤30 min):
+ *     TimerA (completed=0) → TimerA (any completed)
+ *
+ * Two runs of the same timer that are both completed=1 are NEVER grouped.
+ */
+function groupTimerSessions(logs) {
+    const GAP_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+    const groups = [];
+    let i = 0;
+
+    while (i < logs.length) {
+        const root = logs[i];
+        const group = [root];
+        let j = i + 1;
+
+        // Only attempt to extend if the current (root) entry is NOT completed
+        if (root.completed === '0') {
+            const rootName = root.timer_name;
+
+            while (j < logs.length) {
+                const prev = group[group.length - 1];
+                const next = logs[j];
+                const prevIncomplete = prev.completed === '0';
+                const nextIsBackwash = next.timer_name.toLowerCase().includes('backwash');
+
+                // Case 1 – backwash follows an incomplete entry
+                if (prevIncomplete && nextIsBackwash) {
+                    group.push(next);
+                    j++;
+                    // If the very next entry is the root timer again → absorb it too
+                    if (j < logs.length && logs[j].timer_name === rootName) {
+                        group.push(logs[j]);
+                        j++;
+                    }
+                    break; // session ends after the backwash (+ optional resume)
+                }
+
+                // Case 2 – same timer AND same valves resume after a short gap
+                // Require on_valves to match so e.g. "Manual Mode" with different
+                // valve sets are NOT incorrectly merged.
+                if (prevIncomplete && next.timer_name === rootName
+                    && next.on_valves === root.on_valves) {
+                    const gapMs = new Date(next.dt) - new Date(prev.last_sync);
+                    if (gapMs >= 0 && gapMs <= GAP_THRESHOLD_MS) {
+                        group.push(next);
+                        j++;
+                        break; // one gap-resume per session is enough
+                    }
+                }
+
+                break; // nothing matched – end the session
+            }
+        }
+
+        groups.push(group);
+        i = j;
+    }
+
+    return groups;
+}
+
 async function populateTimerDropdown() {
     const historyDropdown = document.getElementById(
         "history-timer-name-dropdown"
@@ -792,251 +860,277 @@ async function fetchTimerHistory() {
             return;
         }
 
-        const table = document.createElement("table");
-        table.className = "table table-striped table-bordered";
-        table.innerHTML = `
-      <thead>
-        <tr>
-          <th class="sortable" data-sort="date">Start Time <span class="sort-icon">⇅</span></th>
-          <th class="sortable" data-sort="endTime">End Time <span class="sort-icon">⇅</span></th>
-          <th class="sortable" data-sort="name">Timer Name <span class="sort-icon">⇅</span></th>
-          <th class="sortable" data-sort="runTime">Run Time <span class="sort-icon">⇅</span></th>
-          <th class="sortable" data-sort="valves">Valves <span class="sort-icon">⇅</span></th>
-          <th>Active Valves</th>
-          <th>Valve Names</th>
-          <th class="sortable" data-sort="completed">Completed <span class="sort-icon">⇅</span></th>
-          <th class="sortable" data-sort="fertigation">Fertigation <span class="sort-icon">⇅</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filteredLogs
-                .map((log) => {
-                    const fertigationInfo = wasFertigationActive(
-                        fertigationLogs,
-                        new Date(log.dt),
-                        new Date(log.last_sync)
-                    );
-                    let fertigationCell = "-";
-                    if (fertigationInfo) {
-                        fertigationCell = `
+        // ── helper: parse HH:MM or HH:MM-HH:MM run_time into total minutes ──────
+        function parseRunMinutes(rt) {
+            if (!rt) return 0;
+            const part = String(rt).split('-')[0].trim();
+            const bits = part.split(':').map(Number);
+            if (bits.length === 2) return bits[0] * 60 + bits[1];
+            return parseInt(rt) || 0;
+        }
+
+        // ── helper: build one timer row ──────────────────────────────────────────
+        // accentColor: null for solo rows, '#fbbf24'/'#34d399' for grouped rows.
+        // position: 'first' | 'mid' | 'last' | 'solo'
+        function buildTimerRow(log, accentColor, position, fertigPct) {
+            const fertigationInfo = wasFertigationActive(
+                fertigationLogs,
+                new Date(log.dt),
+                new Date(log.last_sync)
+            );
+            let fertigationCell = '';
+            if (fertigationInfo) {
+                fertigationCell = `
               <div class="d-flex flex-column align-items-center">
-                <div class="progress w-100 mb-1" style="height: 5px;">
-                  <div class="progress-bar bg-success" style="width: ${fertigationInfo.percentage}%"></div>
+                <div class="progress w-100 mb-1" style="height:5px; background:rgba(255,255,255,0.1);">
+                  <div class="progress-bar bg-success" style="width:${fertigationInfo.percentage}%"></div>
                 </div>
                 <small>${fertigationInfo.duration}</small>
               </div>`;
-                    }
-
-                    // Generate valve images using the same logic as dashboard
-                    let valveImages = "";
-                    let openValveNos = [];
-                    if (log.on_valves) {
-                        const valveArr = log.on_valves.split("-");
-                        // Get list of open valves
-                        for (let i = 0; i < valveArr.length; i++) {
-                            if (valveArr[i] !== "0") {
-                                openValveNos.push(valveArr[i]);
-                            }
-                        }
-
-                        // Generate images for each open valve
-                        openValveNos.forEach((valveNo) => {
-                            let valveName = "";
-                            if (valveNo && valveDetails[valveNo]) {
-                                valveName =
-                                    valveDetails[
-                                        valveNo
-                                    ].valve_name?.toLowerCase() || "";
-                            }
-
-                            let imgSrc = "images/timer-default.png";
-                            if (valveName.includes("coco"))
-                                imgSrc = "images/coconut.png";
-                            else if (valveName.includes("mango"))
-                                imgSrc = "images/mango.png";
-                            else if (valveName.includes("house"))
-                                imgSrc = "images/house.png";
-                            else if (valveName.includes("jamun"))
-                                imgSrc = "images/jamun.png";
-                            else if (valveName.includes("amla"))
-                                imgSrc = "images/amla.png";
-                            else if (valveName.includes("backwash"))
-                                imgSrc = "images/backwash.png";
-                            else if (valveName.includes("grass"))
-                                imgSrc = "images/grass.png";
-                            else if (
-                                valveName.includes("guava") ||
-                                valveName.includes("gova")
-                            )
-                                imgSrc = "images/guava.png";
-                            else if (valveName.includes("onion"))
-                                imgSrc = "images/onion.png";
-                            else if (valveName.includes("pome"))
-                                imgSrc = "images/pomegranate.png";
-                            else if (valveName.includes("veg"))
-                                imgSrc = "images/veg.png";
-                            else if (valveName.includes("kulam"))
-                                imgSrc = "images/kulam.png";
-                            else if (valveName.includes("mulberry"))
-                                imgSrc = "images/mulberry.png";
-                            else if (!valveName) imgSrc = "images/none.png";
-
-                            valveImages += `
-                <div class="d-inline-block text-center" style="margin: 2px;">
-                  <img src="${imgSrc}" alt="Valve ${valveNo}" style="width: 30px;">
-                </div>`;
-                        });
-                    }
-
-                    if (!valveImages) {
-                        valveImages = `
-              <div class="d-inline-block text-center" style="margin: 2px;">
-                <img src="images/none.png" alt="No Valve" style="width: 30px;">
-              </div>`;
-                    }
-
-                    // New: Valve Names Cell
-                    const valveNamesCell = openValveNos.length
-                        ? openValveNos
-                            .map(
-                                (v) =>
-                                    valveDetails[v]?.valve_name ||
-                                    `Valve ${v}`
-                            )
-                            .join(", ")
-                        : "-";
-
-                    return `
-            <tr style="cursor: pointer;">
-              <td>${log.dt}</td>
-              <td>${log.last_sync}</td>
-              <td>${log.timer_name}</td>
-              <td>${log.run_time}</td>
-              <td>${log.on_valves}</td>
-              <td class="text-center">${valveImages}</td>
-              <td>${valveNamesCell}</td>
-              <td>${log.completed === "1" ? "Yes" : "No"}</td>
-              <td class="text-center" style="min-width: 100px;">${fertigationCell}</td>
-            </tr>
-          `;
-                })
-                .join("")}
-      </tbody>
-    `;
-        timerHistoryContent.innerHTML = "";
-        const responsiveWrapper = document.createElement("div");
-        responsiveWrapper.className = "table-responsive";
-        responsiveWrapper.appendChild(table);
-        timerHistoryContent.appendChild(responsiveWrapper);
-
-        // Add sorting functionality
-        let currentSort = { column: null, direction: "asc" };
-
-        function sortTable(column) {
-            const tbody = table.querySelector("tbody");
-            const rows = Array.from(tbody.querySelectorAll("tr"));
-
-            // Update sort direction
-            if (currentSort.column === column) {
-                currentSort.direction =
-                    currentSort.direction === "asc" ? "desc" : "asc";
-            } else {
-                currentSort.column = column;
-                currentSort.direction = "asc";
             }
 
-            // Update sort icons
-            table
-                .querySelectorAll(".sort-icon")
-                .forEach((icon) => (icon.textContent = "⇅"));
-            const currentIcon = table.querySelector(
-                `[data-sort="${column}"] .sort-icon`
-            );
-            if (currentIcon) {
-                currentIcon.textContent =
-                    currentSort.direction === "asc" ? "↑" : "↓";
-            }
-
-            // Sort rows
-            rows.sort((a, b) => {
-                let aValue, bValue;
-
-                switch (column) {
-                    case "date":
-                    case "endTime":
-                        aValue = new Date(
-                            a.cells[column === "date" ? 0 : 1].textContent
-                        );
-                        bValue = new Date(
-                            b.cells[column === "date" ? 0 : 1].textContent
-                        );
-                        break;
-                    case "runTime":
-                        aValue = parseInt(a.cells[3].textContent) || 0;
-                        bValue = parseInt(b.cells[3].textContent) || 0;
-                        break;
-                    case "completed":
-                        // "Completed" is in column index 7
-                        aValue = a.cells[7].textContent.trim() === "Yes" ? 1 : 0;
-                        bValue = b.cells[7].textContent.trim() === "Yes" ? 1 : 0;
-                        break;
-                    case "fertigation":
-                        // "Fertigation" is in column index 8 and contains HTML progress bar
-                        const aBar = a.cells[8].querySelector(".progress-bar");
-                        const bBar = b.cells[8].querySelector(".progress-bar");
-
-                        const aPercent = aBar
-                            ? parseFloat(aBar.style.width) || 0
-                            : (a.cells[8].textContent.trim() === "-" ? 0 : 1);
-                        const bPercent = bBar
-                            ? parseFloat(bBar.style.width) || 0
-                            : (b.cells[8].textContent.trim() === "-" ? 0 : 1);
-
-                        aValue = aPercent;
-                        bValue = bPercent;
-                        break;
-                    default:
-                        aValue =
-                            a.cells[
-                                column === "name" ? 2 : 4
-                            ].textContent.toLowerCase();
-                        bValue =
-                            b.cells[
-                                column === "name" ? 2 : 4
-                            ].textContent.toLowerCase();
+            let valveImages = '';
+            let openValveNos = [];
+            if (log.on_valves) {
+                const valveArr = log.on_valves.split('-');
+                for (let k = 0; k < valveArr.length; k++) {
+                    if (valveArr[k] !== '0') openValveNos.push(valveArr[k]);
                 }
+                openValveNos.forEach((valveNo) => {
+                    let valveName = '';
+                    if (valveNo && valveDetails[valveNo]) {
+                        valveName = valveDetails[valveNo].valve_name?.toLowerCase() || '';
+                    }
+                    let imgSrc = 'images/timer-default.png';
+                    if (valveName.includes('coco')) imgSrc = 'images/coconut.png';
+                    else if (valveName.includes('mango')) imgSrc = 'images/mango.png';
+                    else if (valveName.includes('house')) imgSrc = 'images/house.png';
+                    else if (valveName.includes('jamun')) imgSrc = 'images/jamun.png';
+                    else if (valveName.includes('amla')) imgSrc = 'images/amla.png';
+                    else if (valveName.includes('backwash')) imgSrc = 'images/backwash.png';
+                    else if (valveName.includes('grass')) imgSrc = 'images/grass.png';
+                    else if (valveName.includes('guava') || valveName.includes('gova')) imgSrc = 'images/guava.png';
+                    else if (valveName.includes('onion')) imgSrc = 'images/onion.png';
+                    else if (valveName.includes('pome')) imgSrc = 'images/pomegranate.png';
+                    else if (valveName.includes('veg')) imgSrc = 'images/veg.png';
+                    else if (valveName.includes('kulam')) imgSrc = 'images/kulam.png';
+                    else if (valveName.includes('mulberry')) imgSrc = 'images/mulberry.png';
+                    else if (!valveName) imgSrc = 'images/none.png';
+                    valveImages += `<div class="d-inline-block text-center" style="margin:2px;"><img src="${imgSrc}" alt="Valve ${valveNo}" style="width:32px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));"></div>`;
+                });
+            }
+            if (!valveImages) {
+                valveImages = `<div class="d-inline-block text-center" style="margin:2px;"><img src="images/none.png" alt="No Valve" style="width:32px;opacity:0.5;"></div>`;
+            }
 
-                if (aValue < bValue)
-                    return currentSort.direction === "asc" ? -1 : 1;
-                if (aValue > bValue)
-                    return currentSort.direction === "asc" ? 1 : -1;
-                return 0;
-            });
+            const valveNamesCell = openValveNos.length
+                ? openValveNos.map(v => valveDetails[v]?.valve_name || `Valve ${v}`).join(', ')
+                : '-';
 
-            // Reorder rows
-            tbody.innerHTML = "";
-            rows.forEach((row) => tbody.appendChild(row));
+            // Visual accent for grouped rows.
+            // box-shadow inset renders inside the td regardless of border-radius,
+            // unlike border-left which is clipped by border-radius and invisible.
+            const isGrouped = accentColor !== null;
+            const accentAlpha = isGrouped
+                ? (accentColor === '#fbbf24' ? 'rgba(251,191,36,0.06)' : 'rgba(52,211,153,0.06)')
+                : 'transparent';
+            const rowBg = isGrouped
+                ? `linear-gradient(to right, ${accentAlpha}, rgba(255,255,255,0.04))`
+                : 'rgba(255,255,255,0.03)';
+
+            // Border radius for the first td changes based on position in group
+            let tlr = '12px', blr = '12px'; // solo default
+            if (position === 'first') { tlr = '12px'; blr = '0'; }
+            else if (position === 'mid') { tlr = '0'; blr = '0'; }
+            else if (position === 'last') { tlr = '0'; blr = '12px'; }
+
+            // The vertical stripe: use inset box-shadow which is NOT clipped by border-radius
+            const firstTdStyle = isGrouped
+                ? `box-shadow: inset 4px 0 0 ${accentColor}; border-top-left-radius:${tlr}; border-bottom-left-radius:${blr};`
+                : 'border-top-left-radius:12px; border-bottom-left-radius:12px;';
+
+            const fertPct = fertigationInfo ? fertigationInfo.percentage : 0;
+
+            return `
+            <tr class="timer-history-row" style="background:${rowBg}; cursor:pointer; transition:background 0.15s;"
+                onmouseover="this.style.background='rgba(255,255,255,0.09)';"
+                onmouseout="this.style.background='${rowBg}';"
+                data-start="${log.dt}"
+                data-end="${log.last_sync}"
+                data-name="${log.timer_name}"
+                data-runtime="${parseRunMinutes(log.run_time)}"
+                data-valves="${log.on_valves || ''}"
+                data-completed="${log.completed}"
+                data-fertpct="${fertPct}"
+                data-timer="${log.timer_name}">
+              <td class="border-0 px-3 py-3" style="${firstTdStyle}">
+                <div class="fw-bold text-light"><i class="far fa-clock text-info me-2"></i>${log.dt.split(' ')[1] || log.dt}</div>
+                <div class="small text-muted mt-1" style="margin-left:20px;">${log.dt.split(' ')[0] || ''}</div>
+              </td>
+              <td class="border-0 px-3 py-3">
+                <div class="fw-bold text-light">${log.last_sync.split(' ')[1] || log.last_sync}</div>
+                <div class="small text-muted mt-1">${log.last_sync.split(' ')[0] || ''}</div>
+              </td>
+              <td class="border-0 px-3 py-3">
+                <span class="badge bg-secondary bg-opacity-25 text-light px-3 py-2 border border-secondary border-opacity-50 rounded-pill"><i class="fas fa-tag me-1 text-primary"></i> ${log.timer_name}</span>
+              </td>
+              <td class="border-0 px-3 py-3">
+                <div class="fw-bold text-white"><i class="fas fa-hourglass-half text-muted me-1"></i>${log.run_time} <span class="small fw-normal text-muted">mins</span></div>
+              </td>
+              <td class="border-0 px-3 py-3">
+                <span class="text-muted fw-bold">${log.on_valves}</span>
+              </td>
+              <td class="border-0 px-3 py-3 text-center">
+                <div class="d-flex flex-wrap justify-content-center gap-1">${valveImages}</div>
+              </td>
+              <td class="border-0 px-3 py-3">
+                <div class="small text-muted text-truncate" style="max-width:150px;" title="${valveNamesCell}">${valveNamesCell}</div>
+              </td>
+              <td class="border-0 px-3 py-3">
+                ${log.completed === '1'
+                    ? '<span class="badge bg-success bg-opacity-25 text-success px-3 py-2 rounded-pill border border-success border-opacity-25"><i class="fas fa-check-circle me-1"></i>Yes</span>'
+                    : '<span class="badge bg-warning bg-opacity-25 text-warning px-3 py-2 rounded-pill border border-warning border-opacity-25"><i class="fas fa-bolt me-1"></i>Interrupted</span>'}
+              </td>
+              <td class="border-0 px-3 py-3" style="border-top-right-radius:12px; border-bottom-right-radius:12px;">
+                <div style="min-width:100px;">${fertigationInfo ? fertigationCell : '<span class="text-muted small">None</span>'}</div>
+              </td>
+            </tr>`;
         }
 
-        // Add click handlers to sortable columns
-        table.querySelectorAll(".sortable").forEach((header) => {
-            header.style.cursor = "pointer";
-            header.addEventListener("click", () => {
-                sortTable(header.dataset.sort);
+        // ── render rows – thin session header before each group ────────────────────
+        const sessionGroups = groupTimerSessions(filteredLogs);
+
+        let tbodyHTML = '';
+        sessionGroups.forEach((group) => {
+            if (group.length === 1) {
+                const solo = group[0];
+                const isCompleted = solo.completed === '1';
+                const soloColor = isCompleted ? 'rgba(160,160,160,0.8)' : 'rgba(251,191,36,0.85)';
+                const soloBg = isCompleted ? 'rgba(160,160,160,0.08)' : 'rgba(251,191,36,0.08)';
+                const soloBorder = isCompleted ? 'rgba(160,160,160,0.25)' : 'rgba(251,191,36,0.3)';
+                const soloIcon = isCompleted ? '✓' : '⚠';
+                const soloLabel = isCompleted ? 'Completed' : 'Interrupted';
+                tbodyHTML += `
+            <tr class="session-group-header" style="background:transparent;">
+              <td colspan="9" class="border-0 pb-0 pt-2 px-3">
+                <span style="
+                  display:inline-flex; align-items:center; gap:5px;
+                  font-size:10px; font-weight:700; letter-spacing:0.08em;
+                  text-transform:uppercase; color:${soloColor};
+                  background:${soloBg}; border:1px solid ${soloBorder};
+                  border-radius:999px; padding:2px 10px;
+                ">${soloIcon} ${soloLabel}</span>
+              </td>
+            </tr>`;
+                tbodyHTML += buildTimerRow(solo, null, 'solo');
+                return;
+            }
+
+            const hasBackwash = group.some(l => l.timer_name.toLowerCase().includes('backwash'));
+            const accentColor = hasBackwash ? '#fbbf24' : '#34d399';
+            const sessionLabel = hasBackwash ? 'Backwash Session' : 'Resumed Session';
+            const sessionIcon = hasBackwash ? '↺' : '⚡';
+
+            // Thin header row – not a timer-history-row so sort ignores it
+            tbodyHTML += `
+            <tr class="session-group-header" style="background:transparent;">
+              <td colspan="9" class="border-0 pb-0 pt-2 px-3">
+                <span style="
+                  display:inline-flex; align-items:center; gap:5px;
+                  font-size:10px; font-weight:700; letter-spacing:0.08em;
+                  text-transform:uppercase; color:${accentColor};
+                  background:${accentColor}20; border:1px solid ${accentColor}40;
+                  border-radius:999px; padding:2px 10px;
+                ">${sessionIcon} ${sessionLabel}</span>
+              </td>
+            </tr>`;
+
+            group.forEach((log, idx) => {
+                const position = idx === 0 ? 'first' : idx === group.length - 1 ? 'last' : 'mid';
+                tbodyHTML += buildTimerRow(log, accentColor, position);
             });
         });
 
-        // Switch to pressure analysis tab if a timer is selected
+        const table = document.createElement('table');
+        table.className = 'table mb-0 align-middle text-white';
+        table.style.borderCollapse = 'separate';
+        table.style.borderSpacing = '0 5px';
+        table.innerHTML = `
+      <thead style="background:rgba(255,255,255,0.02);">
+        <tr>
+          <th class="sortable border-0 text-muted fw-normal" style="border-top-left-radius:8px;border-bottom-left-radius:8px;padding:12px 16px;" data-sort="date">Start Time <span class="sort-icon">⇅</span></th>
+          <th class="sortable border-0 text-muted fw-normal" style="padding:12px 16px;" data-sort="endTime">End Time <span class="sort-icon">⇅</span></th>
+          <th class="sortable border-0 text-muted fw-normal" style="padding:12px 16px;" data-sort="name">Timer Name <span class="sort-icon">⇅</span></th>
+          <th class="sortable border-0 text-muted fw-normal" style="padding:12px 16px;" data-sort="runTime">Run Time <span class="sort-icon">⇅</span></th>
+          <th class="sortable border-0 text-muted fw-normal" style="padding:12px 16px;" data-sort="valves">Valves <span class="sort-icon">⇅</span></th>
+          <th class="border-0 text-muted fw-normal text-center" style="padding:12px 16px;">Active Valves</th>
+          <th class="border-0 text-muted fw-normal" style="padding:12px 16px;">Valve Names</th>
+          <th class="sortable border-0 text-muted fw-normal" style="padding:12px 16px;" data-sort="completed">Status <span class="sort-icon">⇅</span></th>
+          <th class="sortable border-0 text-muted fw-normal" style="border-top-right-radius:8px;border-bottom-right-radius:8px;padding:12px 16px;" data-sort="fertigation">Fertigation <span class="sort-icon">⇅</span></th>
+        </tr>
+      </thead>
+      <tbody>${tbodyHTML}</tbody>
+    `;
+        timerHistoryContent.innerHTML = '';
+        const responsiveWrapper = document.createElement('div');
+        responsiveWrapper.className = 'table-responsive';
+        responsiveWrapper.appendChild(table);
+        timerHistoryContent.appendChild(responsiveWrapper);
+
+        // ── sort (reads from tr.dataset – index-independent) ─────────────────────
+        let currentSort = { column: null, direction: 'asc' };
+
+        function sortTable(column) {
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr.timer-history-row'));
+
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            table.querySelectorAll('.sort-icon').forEach(ic => (ic.textContent = '⇅'));
+            const ic = table.querySelector(`[data-sort="${column}"] .sort-icon`);
+            if (ic) ic.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+
+            rows.sort((a, b) => {
+                let av, bv;
+                switch (column) {
+                    case 'date': av = new Date(a.dataset.start || 0); bv = new Date(b.dataset.start || 0); break;
+                    case 'endTime': av = new Date(a.dataset.end || 0); bv = new Date(b.dataset.end || 0); break;
+                    case 'runTime': av = parseInt(a.dataset.runtime) || 0; bv = parseInt(b.dataset.runtime) || 0; break;
+                    case 'valves': av = (a.dataset.valves || '').toLowerCase(); bv = (b.dataset.valves || '').toLowerCase(); break;
+                    case 'name': av = (a.dataset.name || '').toLowerCase(); bv = (b.dataset.name || '').toLowerCase(); break;
+                    case 'completed': av = parseInt(a.dataset.completed) || 0; bv = parseInt(b.dataset.completed) || 0; break;
+                    case 'fertigation': av = parseFloat(a.dataset.fertpct) || 0; bv = parseFloat(b.dataset.fertpct) || 0; break;
+                    default: av = ''; bv = '';
+                }
+                if (av < bv) return currentSort.direction === 'asc' ? -1 : 1;
+                if (av > bv) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        table.querySelectorAll('.sortable').forEach(header => {
+            header.style.cursor = 'pointer';
+            header.addEventListener('click', () => sortTable(header.dataset.sort));
+        });
+
+        // Switch to pressure analysis tab if a specific timer is selected
         if (timerName) {
-            const pressureTab = document.getElementById(
-                "pressure-analysis-tab"
-            );
-            const pressureDropdown = document.getElementById(
-                "pressure-timer-dropdown"
-            );
-            pressureDropdown.value = timerName;
-            pressureTab.click();
-            graphAllPressures(filteredLogs);
+            const pressureNavBtn = document.querySelector('[data-target="#pressure-analysis"]');
+            if (pressureNavBtn) pressureNavBtn.click();
+            const pressureDropdown = document.getElementById('pressure-timer-dropdown');
+            if (pressureDropdown) pressureDropdown.value = timerName;
+            setTimeout(() => {
+                const analyzeBtn = document.getElementById('analyze-pressure-btn');
+                if (analyzeBtn) analyzeBtn.click();
+            }, 300);
         }
 
         attachTimerClickHandlers();
@@ -1075,7 +1169,7 @@ async function fetchFertigationLogsForDateRange(fromDate, toDate) {
 function formatTimeDuration(minutes) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    return hours > 0 ? `${hours}h ${mins} m` : `${mins} m`;
 }
 
 // --- Helper function to get overlapping time between timer and fertigation ---
@@ -1142,7 +1236,8 @@ async function graphAllPressures(logs) {
         const pressureDataPromises = logs.map(async (log) => {
             const linktext = `https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(
                 log.dt
-            )}&to=${encodeURIComponent(log.last_sync)}&product=DCON`;
+            )
+                }& to=${encodeURIComponent(log.last_sync)}& product=DCON`;
             const response = await fetch(linktext);
             if (!response.ok) throw new Error("Failed to fetch pressure data");
             const data = await response.json();
@@ -1170,7 +1265,7 @@ async function graphAllPressures(logs) {
                 const hue = index * (360 / allPressureData.length);
                 const segmentColor = isBackwash
                     ? backwashColor
-                    : `hsla(${hue}, 70%, 50%, 0.2)`;
+                    : `hsla(${hue}, 70 %, 50 %, 0.2)`;
                 const inputColor = "#34d399";
                 const outputColor = "#fbbf24";
 
@@ -1197,8 +1292,8 @@ async function graphAllPressures(logs) {
                 const endTimeStr = new Date(timeEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const durationMins = Math.round((timeEnd - timeStart) / 60000);
 
-                const segmentInputColor = `hsla(${hue}, 80%, 55%, 1)`;
-                const segmentOutputColor = `hsla(${hue}, 80%, 75%, 1)`;
+                const segmentInputColor = `hsla(${hue}, 80 %, 55 %, 1)`;
+                const segmentOutputColor = `hsla(${hue}, 80 %, 75 %, 1)`;
 
                 const timerName = logs[index].timer_name;
                 let labelName = timerName;
@@ -1253,12 +1348,12 @@ async function graphAllPressures(logs) {
         const maxPressure = Math.ceil(Math.max(...allPressureValues) + 0.5);
 
         chartContainer.innerHTML = `
-      <div class="text-center mb-4">
-        <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Solid lines: Input Pressure | Dashed lines: Output Pressure</small>
-      </div>
-      <div style="height: 480px;">
-        <canvas id="pressure-chart"></canvas>
-      </div>
+        <div class="text-center mb-4">
+            <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Solid lines: Input Pressure | Dashed lines: Output Pressure</small>
+      </div >
+        <div style="height: 480px;">
+            <canvas id="pressure-chart"></canvas>
+        </div>
     `;
         const ctx = document.getElementById("pressure-chart").getContext("2d");
         const instanceInfoPlugin = {
@@ -1285,7 +1380,7 @@ async function graphAllPressures(logs) {
                         ctx.setLineDash([]);
                         ctx.fillStyle = dataset.borderColor;
                         ctx.font = '600 11px Inter, sans-serif';
-                        ctx.fillText(`${info.start} - ${info.end}`, midX, chartArea.bottom + 15);
+                        ctx.fillText(`${info.start} - ${info.end} `, midX, chartArea.bottom + 15);
                         ctx.fillStyle = '#8899aa';
                         ctx.font = '500 10px Inter, sans-serif';
                         ctx.fillText(`${info.avg} bar avg`, midX, chartArea.bottom + 30);
@@ -1391,7 +1486,8 @@ async function fetchPressureData(from, to) {
         const response = await fetch(
             `https://dcon.mobitechwireless.com/v1/http/?action=reports&type=pressure_timer&serial_no=MCON874Q000568&from=${encodeURIComponent(
                 from
-            )}&to=${encodeURIComponent(to)}&product=DCON`
+            )
+            }& to=${encodeURIComponent(to)}& product=DCON`
         );
         if (!response.ok) throw new Error("Failed to fetch pressure data");
 
@@ -1415,9 +1511,9 @@ async function fetchPressureData(from, to) {
 
         // Create chart
         chartContainer.innerHTML = `
-      <div style="height: 500px;">
+    < div style = "height: 500px;" >
         <canvas id="pressure-chart"></canvas>
-      </div>
+      </div >
     `;
         const ctx = document.getElementById("pressure-chart").getContext("2d");
         new Chart(ctx, {
@@ -1459,23 +1555,33 @@ async function fetchPressureData(from, to) {
 }
 
 function attachTimerClickHandlers() {
-    const timerRows = document.querySelectorAll(
-        "#timer-history-content table tbody tr"
-    );
+    const timerRows = document.querySelectorAll(".timer-history-row");
     timerRows.forEach((row) => {
         row.addEventListener("click", () => {
-            const from = row.cells[0].textContent.trim();
-            const to = row.cells[1].textContent.trim();
-            const timerName = row.cells[2].textContent.trim();
-            const pressureTab = document.getElementById(
-                "pressure-analysis-tab"
-            );
-            const pressureDropdown = document.getElementById(
-                "pressure-timer-dropdown"
-            );
-            pressureDropdown.value = timerName;
-            pressureTab.click();
-            fetchPressureData(from, to);
+            const from = row.dataset.start;
+            const to = row.dataset.end;
+            const timerName = row.dataset.timer;
+
+            // Navigate to pressure tab
+            const pressureNavBtn = document.querySelector('[data-target="#pressure-analysis"]');
+            if (pressureNavBtn) pressureNavBtn.click();
+
+            // Set filters match the dropdown values if possible
+            const pressureDropdown = document.getElementById("pressure-timer-dropdown");
+            if (pressureDropdown) pressureDropdown.value = timerName;
+
+            const fromDateInput = document.getElementById("pressure-from-date");
+            const toDateInput = document.getElementById("pressure-to-date");
+
+            // Extract YYYY-MM-DD from 'YYYY-MM-DD HH:MM:SS'
+            if (from && fromDateInput) fromDateInput.value = from.split(' ')[0];
+            if (to && toDateInput) toDateInput.value = to.split(' ')[0];
+
+            // Small delay to allow tab opening UI to settle
+            setTimeout(() => {
+                const analyzeBtn = document.getElementById("analyze-pressure-btn");
+                if (analyzeBtn) analyzeBtn.click();
+            }, 300);
         });
     });
 }
@@ -1501,11 +1607,13 @@ async function updateAiInsights() {
             ) / history.length || 0;
         if (pressureDiff > avgPressureDiff * 1.5 && pressureDiff > 0.5) {
             anomalies.push(
-                `Pressure difference (${pressureDiff.toFixed(
+                `Pressure difference(${pressureDiff.toFixed(
                     2
-                )} bar) is higher than normal (${avgPressureDiff.toFixed(
+                )
+                } bar) is higher than normal(${avgPressureDiff.toFixed(
                     2
-                )} bar avg).`
+                )
+                } bar avg).`
             );
         }
 
@@ -1519,7 +1627,7 @@ async function updateAiInsights() {
                     ) / history.length || 0;
                 if (avg > 0 && live[phase] < avg * 0.8) {
                     anomalies.push(
-                        `${phase.replace(/_/g, " ")} is low (${live[phase]
+                        `${phase.replace(/_/g, " ")} is low(${live[phase]
                         }V, avg ${avg.toFixed(1)}V).`
                     );
                 }
@@ -1536,7 +1644,7 @@ async function updateAiInsights() {
         const minCurr = Math.min(...currents);
         if (maxCurr - minCurr > 2) {
             anomalies.push(
-                `Current imbalance detected (Range: ${minCurr}A - ${maxCurr}A).`
+                `Current imbalance detected(Range: ${minCurr}A - ${maxCurr}A).`
             );
         }
 
@@ -1573,18 +1681,18 @@ async function updateAiInsights() {
 
             if (anomalies.length === 0) {
                 insightsDiv.innerHTML = `
-          <div class="alert alert-success">
-            ✅ No anomalies detected. All systems operating normally.
-          </div>`;
+    <div class="alert alert-success">
+            ✅ No anomalies detected.All systems operating normally.
+          </div > `;
             } else {
                 const listItems = anomalies
                     .map((a) => `<li>${a}</li>`)
                     .join("");
                 insightsDiv.innerHTML = `
-          <div class="alert alert-warning text-start">
+    <div class="alert alert-warning text-start">
             <strong>⚠️ Anomalies Detected:</strong>
             <ul>${listItems}</ul>
-          </div>`;
+          </div > `;
             }
         } else {
             insightsDiv.innerHTML =
@@ -1641,6 +1749,8 @@ async function fetchAllDashboardData() {
         fetchLiveData(),
         populateDashboardOverview(),
         fetchTimerHistory(),
+        fetchSupplyMotorStatus(),
+        fetchSecondarySupplyMotorStatus(),
         updateAiInsights(),
         generateSmartRecommendation(),
     ]);
@@ -1649,7 +1759,6 @@ async function fetchAllDashboardData() {
 // Fetch every 5 minutes
 setInterval(fetchAllDashboardData, 5 * 60 * 1000);
 
-// --- Populate the timer dropdown and set up history/pressure analysis ---
 document.addEventListener("DOMContentLoaded", () => {
     populateTimerDropdown();
     document
@@ -1760,7 +1869,7 @@ function updateFertigationStatus(isActive, startTime, notes) {
             const duration = Math.floor((now - startTime) / 1000 / 60); // minutes
             const hours = Math.floor(duration / 60);
             const minutes = duration % 60;
-            timerDisplay.textContent = `Duration: ${hours}h ${minutes}m`;
+            timerDisplay.textContent = `Duration: ${hours}h ${minutes} m`;
         }
 
         updateTimer();
@@ -1873,7 +1982,7 @@ function updateFertigationChart(logs) {
         });
 
         datasets.push({
-            label: `Tank ${i + 1}`,
+            label: `Tank ${i + 1} `,
             data: data,
             customTimes: times, // Store times for tooltip
             backgroundColor: colorPalette[i % colorPalette.length],
@@ -2087,7 +2196,7 @@ async function loadFertigationHistory(isLoadMore = false) {
                         const valveIndices = timer.on_valves.split("-").filter(v => v !== "0");
                         if (valveIndices.length > 0) {
                             return valveIndices
-                                .map(v => (valveDetails[v] ? valveDetails[v].valve_name : `Valve ${v}`))
+                                .map(v => (valveDetails[v] ? valveDetails[v].valve_name : `Valve ${v} `))
                                 .join(", ");
                         }
                     }
@@ -2100,7 +2209,7 @@ async function loadFertigationHistory(isLoadMore = false) {
         <td>${duration}</td>
         <td>${timerInfo || "-"}</td>
         <td>${log.notes || "-"}</td>
-      `;
+        `;
             historyTableBody.appendChild(row);
         });
 
@@ -2113,10 +2222,10 @@ async function loadFertigationHistory(isLoadMore = false) {
     } catch (error) {
         console.error("Error loading fertigation history:", error);
         historyTableBody.innerHTML = `
-      <tr>
-        <td colspan="4" class="text-center text-danger">
-          Error loading history. Please try again later.
-        </td>
+            <tr>
+            <td colspan="4" class="text-center text-danger">
+                Error loading history. Please try again later.
+            </td>
       </tr>`;
     }
 }
@@ -2280,13 +2389,13 @@ function renderValveGroupQueue() {
         li.className =
             "list-group-item d-flex justify-content-between align-items-center";
         li.innerHTML = `
-      <span>${valveNames}</span>
-        <div>
-        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveUpInValveGroupQueue(${index})"><i class="fa-solid fa-arrow-up"></i></button>
-        <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveDownInValveGroupQueue(${index})"><i class="fa-solid fa-arrow-down"></i></button>
-        <button class="btn btn-sm btn-outline-danger queue-control-btn" onclick="removeFromValveGroupQueue(${index})"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-    `;
+            <span>${valveNames}</span>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveUpInValveGroupQueue(${index})"><i class="fa-solid fa-arrow-up"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary me-1 queue-control-btn" onclick="moveDownInValveGroupQueue(${index})"><i class="fa-solid fa-arrow-down"></i></button>
+                    <button class="btn btn-sm btn-outline-danger queue-control-btn" onclick="removeFromValveGroupQueue(${index})"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+        `;
         list.appendChild(li);
         // Disable queue controls if add button is disabled
         const addBtn = document.getElementById("add-valve-group-btn");
@@ -2311,11 +2420,11 @@ function renderValveGroupQueue() {
     const recHeader = document.createElement("div");
     recHeader.className = "d-flex justify-content-between align-items-center mb-1 px-1";
     recHeader.innerHTML = `
-        <span class="extra-small text-muted" style="letter-spacing:0.05em; text-transform:uppercase;">AI Suggestions</span>
-        <button id="reload-rec-btn" class="btn btn-sm btn-link p-0" style="color: var(--accent-teal); font-size:0.75rem;" title="Refresh recommendations">
-            <i class="fas fa-rotate-right"></i>
-        </button>
-    `;
+            <span class="extra-small text-muted" style="letter-spacing:0.05em; text-transform:uppercase;">AI Suggestions</span>
+                <button id="reload-rec-btn" class="btn btn-sm btn-link p-0" style="color: var(--accent-teal); font-size:0.75rem;" title="Refresh recommendations">
+                    <i class="fas fa-rotate-right"></i>
+                </button>
+        `;
     recSection.appendChild(recHeader);
 
     if (currentSmartRecommendation && Array.isArray(currentSmartRecommendation) && currentSmartRecommendation.length > 0) {
@@ -2341,7 +2450,7 @@ function renderValveGroupQueue() {
 
                 const valveNames = rec.valves.map(v => v.name).join(", ");
                 recItem.innerHTML = `
-                    <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center">
                         <i class="fas fa-magic me-3" style="color: var(--accent-teal);"></i>
                         <div>
                             <div class="small fw-bold text-white">Suggested: ${rec.name}</div>
@@ -2349,9 +2458,9 @@ function renderValveGroupQueue() {
                             <div class="extra-small text-muted italic" style="font-size: 0.65rem; opacity: 0.8;">${rec.reason}</div>
                         </div>
                     </div>
-                    <button class="btn btn-sm btn-link p-0" style="color: var(--accent-teal);" title="Add to queue">
-                        <i class="fas fa-plus-circle"></i>
-                    </button>`;
+            <button class="btn btn-sm btn-link p-0" style="color: var(--accent-teal);" title="Add to queue">
+                <i class="fas fa-plus-circle"></i>
+            </button>`;
 
                 recItem.onclick = (e) => {
                     if (e.target.closest("#reload-rec-btn")) return;
@@ -2371,7 +2480,7 @@ function renderValveGroupQueue() {
             loadingItem.style.background = "rgba(52, 211, 153, 0.05)";
             loadingItem.style.opacity = "0.35";
             loadingItem.innerHTML = `
-                 <div class="d-flex align-items-center">
+                <div class="d-flex align-items-center">
                      <i class="fas fa-magic me-3" style="color: var(--accent-teal);"></i>
                      <div class="small text-muted">Loading more suggestions…</div>
                  </div>`;
@@ -2461,10 +2570,10 @@ async function addToValveQueue(valves, isAuto = false) {
         const valveNames = valves.map(v => v.name).join(", ");
         const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: true, timeStyle: "short" });
         notifyZohoCliq([
-            `📥 *Queue Updated (Auto-Scheduler)*`,
-            `🪴 Added: ${valveNames}`,
-            `📋 Queue length: ${valveGroupQueue.length}`,
-            `⏰ Time: ${now}`,
+            `📥 * Queue Updated(Auto - Scheduler) * `,
+            `🪴 Added: ${valveNames} `,
+            `📋 Queue length: ${valveGroupQueue.length} `,
+            `⏰ Time: ${now} `,
         ].join("\n"));
     }
 }
@@ -2521,44 +2630,44 @@ async function openValveSelectionModal() {
 
     const modalId = "valveGroupSelectionModal";
     let modalHtml = `
-    <div class="modal fade glass-modal" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="${modalId}Label">Select Predefined Valve Group</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-             <p class="text-muted small">Only predefined valve groups can be queued to regulate pressure. Create more groups in the Admin Panel.</p>
-            <form id="valve-group-selection-form">
-              <div class="list-group">
-  `;
+            <div class="modal fade glass-modal" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="${modalId}Label">Select Predefined Valve Group</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted small">Only predefined valve groups can be queued to regulate pressure. Create more groups in the Admin Panel.</p>
+                            <form id="valve-group-selection-form">
+                                <div class="list-group">
+                                    `;
 
     predefinedValveGroups.forEach((group, index) => {
         const valveNames = group.valves.map(v => v.name).join(", ");
         modalHtml += `
-            <label class="list-group-item d-flex gap-3 bg-transparent text-white" style="border-color: rgba(255,255,255,0.1);">
-                <input class="form-check-input flex-shrink-0" type="radio" name="valveGroupSelector" id="group-radio-${index}" value="${index}">
-                <span>
-                    <strong>${group.name}</strong>
-                    <small class="d-block text-muted mt-1"><i class="fas fa-water me-1"></i> ${valveNames}</small>
-                </span>
-            </label>
-        `;
+                                    <label class="list-group-item d-flex gap-3 bg-transparent text-white" style="border-color: rgba(255,255,255,0.1);">
+                                        <input class="form-check-input flex-shrink-0" type="radio" name="valveGroupSelector" id="group-radio-${index}" value="${index}">
+                                            <span>
+                                                <strong>${group.name}</strong>
+                                                <small class="d-block text-muted mt-1"><i class="fas fa-water me-1"></i> ${valveNames}</small>
+                                            </span>
+                                    </label>
+                                    `;
     });
 
     modalHtml += `
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="confirm-valve-selection-btn">Add to Queue</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirm-valve-selection-btn">Add to Queue</button>
+                        </div>
+                    </div>
+                </div>
+    </div >
+            `;
 
     const oldModal = document.getElementById(modalId);
     if (oldModal) oldModal.remove();
@@ -2691,7 +2800,7 @@ function renderAdminValveGroups() {
                     </div>
                 </div>
             </div>
-        `;
+            `;
         grid.appendChild(cardNode);
     });
 }
@@ -2716,45 +2825,45 @@ async function openCreateValveGroupModal() {
 
     const modalId = "adminCreateGroupModal";
     let modalHtml = `
-    <div class="modal fade glass-modal" id="${modalId}" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Create Valve Group</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <form id="admin-valve-group-form">
-              <div class="mb-4">
-                <label for="group-name-input" class="form-label text-muted small">Group Name</label>
-                <input type="text" class="form-control" id="group-name-input" placeholder="e.g. Mango Farm Sector 1" required>
-              </div>
-              <label class="form-label text-muted small">Select Valves for this Group</label>
-              <div class="row g-2 max-h-300 overflow-auto border p-2 rounded" style="border-color: rgba(255,255,255,0.05) !important;">
-  `;
+            <div class="modal fade glass-modal" id="${modalId}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Create Valve Group</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="admin-valve-group-form">
+                                <div class="mb-4">
+                                    <label for="group-name-input" class="form-label text-muted small">Group Name</label>
+                                    <input type="text" class="form-control" id="group-name-input" placeholder="e.g. Mango Farm Sector 1" required>
+                                </div>
+                                <label class="form-label text-muted small">Select Valves for this Group</label>
+                                <div class="row g-2 max-h-300 overflow-auto border p-2 rounded" style="border-color: rgba(255,255,255,0.05) !important;">
+                                    `;
     Object.keys(valveDetails).forEach((valveNo) => {
         const vName = valveDetails[valveNo].valve_name || `Valve ${valveNo}`;
         modalHtml += `
-        <div class="col-6">
-            <div class="form-check p-2 rounded" style="background: rgba(255,255,255,0.03);">
-              <input class="form-check-input ms-1" type="checkbox" value="${valveNo}" id="admin-val-${valveNo}">
-              <label class="form-check-label ms-2 small" for="admin-val-${valveNo}">${vName}</label>
-            </div>
-        </div>
-        `;
+                                    <div class="col-6">
+                                        <div class="form-check p-2 rounded" style="background: rgba(255,255,255,0.03);">
+                                            <input class="form-check-input ms-1" type="checkbox" value="${valveNo}" id="admin-val-${valveNo}">
+                                                <label class="form-check-label ms-2 small" for="admin-val-${valveNo}">${vName}</label>
+                                        </div>
+                                    </div>
+                                    `;
     });
     modalHtml += `
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="save-new-group-btn">Save Group</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="save-new-group-btn">Save Group</button>
+                        </div>
+                    </div>
+                </div>
+    </div >
+            `;
 
     const oldModal = document.getElementById(modalId);
     if (oldModal) oldModal.remove();
@@ -2778,7 +2887,7 @@ async function openCreateValveGroupModal() {
 
         const selectedValves = checked.map((cb) => ({
             id: cb.value,
-            name: valveDetails[cb.value]?.valve_name || `Valve ${cb.value}`,
+            name: valveDetails[cb.value]?.valve_name || `Valve ${cb.value} `,
         }));
 
         try {
@@ -2958,7 +3067,7 @@ function updateFertigationValveStatsChart(processedLogs, valveDetails) {
                 if (timer.on_valves) {
                     const valveIndices = timer.on_valves.split("-").filter(v => v !== "0");
                     valveIndices.forEach(v => {
-                        const valveName = valveDetails[v] ? valveDetails[v].valve_name : `Valve ${v}`;
+                        const valveName = valveDetails[v] ? valveDetails[v].valve_name : `Valve ${v} `;
 
                         if (!valveStats[valveName]) {
                             valveStats[valveName] = { duration: 0, tanks: 0 };
@@ -3109,6 +3218,121 @@ async function notifyZohoCliq(message) {
         });
     } catch (err) {
         console.error("Failed to send CLIQ notification:", err);
+    }
+}
+
+// --- Supply Motor Status Fetching ---
+async function fetchSupplyMotorStatus() {
+    const dot = document.getElementById("supply-motor-dot");
+    const text = document.getElementById("supply-motor-status-text");
+    const banner = document.getElementById("supply-motor-status-banner");
+    const image = document.getElementById("supply-motor-image");
+    const desc = document.getElementById("supply-motor-desc");
+
+    try {
+        const response = await fetch("http://3.1.62.165:8080/api/v1/user/5339/cluster/6039/controller");
+        const json = await response.json();
+
+        if (json.code === 200 && json.data && json.data.length > 0) {
+            const data = json.data[0];
+            const isRunning = data.Power === "1";
+
+            // Update Header Banner
+            if (isRunning) {
+                dot.className = "status-dot active m-0";
+                text.textContent = "Running";
+                banner.style.background = "rgba(16, 133, 66, 0.15)";
+                banner.style.borderBottom = "2px solid var(--accent-emerald)";
+                image.src = "images/motor-on.png";
+                image.style.filter = "drop-shadow(0 0 20px var(--accent-emerald))";
+                desc.textContent = "Transferring water from the supply well to the main farm well.";
+                desc.className = "text-white opacity-75";
+            } else {
+                dot.className = "status-dot inactive m-0";
+                text.textContent = "OFF / STOPPED";
+                banner.style.background = "rgba(248, 113, 113, 0.25)";
+                banner.style.borderBottom = "2px solid var(--danger)";
+                image.src = "images/motor-off.png";
+                image.style.filter = "drop-shadow(0 0 20px var(--danger))";
+                desc.textContent = "Transfer pump is OFF. Main well is not receiving water.";
+                desc.className = "text-danger fw-bold";
+            }
+
+            // Update Details
+            document.getElementById("sm-device-name").textContent = data.deviceName || "--";
+            document.getElementById("sm-msg-desc").textContent = data.msgDesc || "--";
+            document.getElementById("sm-motor-status").textContent = data.motorStatus || "--";
+            document.getElementById("sm-latest-msg").textContent = data.ctrlLatestMsg || "--";
+            document.getElementById("sm-op-mode").textContent = data.operationMode === "10" ? "Auto" : "Manual";
+            document.getElementById("sm-sim-number").textContent = data.simNumber || "--";
+        }
+    } catch (err) {
+        console.error("Failed to fetch supply motor status:", err);
+        if (text) text.textContent = "Error fetching status";
+        if (dot) dot.className = "status-dot warning m-0";
+    }
+}
+
+// --- Secondary Supply Motor Status Fetching (Well) ---
+async function fetchSecondarySupplyMotorStatus() {
+    const dot = document.getElementById("supply-motor2-dot");
+    const text = document.getElementById("supply-motor2-status-text");
+    const banner = document.getElementById("supply-motor2-status-banner");
+    const image = document.getElementById("supply-motor2-image");
+    const desc = document.getElementById("supply-motor2-desc");
+
+    if (!dot || !text || !banner || !image || !desc) return;
+
+    try {
+        const response = await fetch("https://gsm.liveskytech.com:3001/getMotors?imei=860537060208758", {
+            method: 'GET',
+            headers: {
+                'Host': 'gsm.liveskytech.com:3001',
+                'Accept': 'application/json, text/plain, */*',
+                'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybWFpbCI6InNpYmhpLmd2QGdtYWlsLmNvbSIsInNlc3Npb24iOjE3NzE5MTkyNzMwMzYsIm1vYmlsZV9ubyI6Ijg4MjU2MjIzNjAiLCJpYXQiOjE3NzE5MTkyNzMsImV4cCI6MTc3MjAwNTY3M30.DR40j_VPZ3QxwNFCO4VhWV64iOo8EwfTKZXTOXqK6KM',
+                'User-Agent': 'SSC/1 CFNetwork/3860.300.31 Darwin/25.2.0',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+        });
+        const json = await response.json();
+
+        if (json && json.length > 0) {
+            const data = json[0];
+            const isRunning = data.motor_status === "MOTORON";
+
+            // Update Header Banner
+            if (isRunning) {
+                dot.className = "status-dot active m-0";
+                text.textContent = "Running";
+                banner.style.background = "rgba(16, 133, 66, 0.15)";
+                banner.style.borderBottom = "2px solid var(--accent-emerald)";
+                image.src = "images/motor-on.png";
+                image.style.filter = "drop-shadow(0 0 20px var(--accent-emerald))";
+                desc.textContent = "Pumping water from the river to the supply well.";
+                desc.className = "text-white opacity-75";
+            } else {
+                dot.className = "status-dot inactive m-0";
+                text.textContent = "OFF / STOPPED";
+                banner.style.background = "rgba(248, 113, 113, 0.25)";
+                banner.style.borderBottom = "2px solid var(--danger)";
+                image.src = "images/motor-off.png";
+                image.style.filter = "drop-shadow(0 0 20px var(--danger))";
+                desc.textContent = "River pump is OFF. Supply well is not receiving water.";
+                desc.className = "text-danger fw-bold";
+            }
+
+            // Update Details
+            document.getElementById("sm2-phase").textContent = data.phase ? `${data.phase} Phase` : "--";
+            document.getElementById("sm2-runtime").textContent = data.runtime || "--";
+            document.getElementById("sm2-motor-status").textContent = data.motor_status || "--";
+            document.getElementById("sm2-last-connect").textContent = data.time || "--";
+            document.getElementById("sm2-op-mode").textContent = data.mode || "--";
+            document.getElementById("sm2-network").textContent = (data.modem_model || "") + " " + (data.mobile_operator_name || "");
+        }
+    } catch (err) {
+        console.error("Failed to fetch secondary supply motor status:", err);
+        if (text) text.textContent = "Error fetching status";
+        if (dot) dot.className = "status-dot warning m-0";
     }
 }
 
