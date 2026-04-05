@@ -10,93 +10,198 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalUserEmail = document.getElementById("modal-user-email");
     const modalUserPhoto = document.getElementById("modal-user-photo");
 
-    // --- Fertigation permission check and auth state update ---
-    async function checkFertigationPermission(user) {
-        const btn = document.getElementById("add-valve-group-btn"); // Make sure this matches your HTML ID
-        if (!btn) return;
+    // --- User Profile Sync and Permission Check ---
+    async function syncUserProfile(user) {
+        if (!user) return;
+
+        const userRef = db.collection("users").doc(user.uid);
+        const fertBtn = document.getElementById("add-valve-group-btn");
 
         try {
-            const docRef = firebase.firestore().doc("irrigation_devices/Users");
-            const doc = await docRef.get();
-            if (doc.exists) {
-                const data = doc.data();
-                const allowed = data.allowedEmails || [];
-
-                // --- Begin new permission logic for Add Valve Group and queue controls ---
-                if (allowed.includes(user.email)) {
-                    // ✅ Enable Add Valve Group button
-                    btn.classList.remove("disabled");
-                    btn.style.opacity = "";
-                    btn.style.pointerEvents = "";
-                    btn.onclick = null; // clear unauthorized alert
-                    // ✅ Enable queue control buttons
-                    document.querySelectorAll('.queue-control-btn').forEach(b => {
-                        b.disabled = false;
-                        b.classList.remove("disabled");
-                        b.style.opacity = "";
-                        b.style.pointerEvents = "";
-                        // Remove previous unauthorized alert listeners if any
-                        b.replaceWith(b.cloneNode(true));
-                    });
-                    // ✅ Enable select valves button
-                    const selectBtn = document.getElementById("select-valves-btn");
-                    if (selectBtn) {
-                        selectBtn.classList.remove("disabled");
-                        selectBtn.style.opacity = "";
-                        selectBtn.style.pointerEvents = "";
-                        selectBtn.onclick = null; // remove unauthorized alert if previously set
-                    }
-                } else {
-                    // 🚫 Simulate disabled Add Valve Group button
-                    btn.classList.add("disabled");
-                    btn.style.opacity = "0.5";
-                    btn.style.pointerEvents = "auto";
-
-                    // Remove existing modal click events by cloning and replacing the element
-                    const newBtn = btn.cloneNode(true);
-                    btn.parentNode.replaceChild(newBtn, btn);
-
-                    // Add alert-only behavior
-                    newBtn.onclick = (e) => {
-                        e.preventDefault();
-                        alert("🚫 You are not authorized to add fertigation queues.");
-                    };
-                    // ✅ Disable queue control buttons
-                    document.querySelectorAll('.queue-control-btn').forEach(b => {
-                        b.classList.add("disabled");
-                        b.style.opacity = "0.5";
-                        b.style.pointerEvents = "auto";
-                        b.addEventListener("click", (e) => {
-                            e.preventDefault();
-                            alert("🚫 You are not authorized to modify the fertigation queue.");
-                        });
-                    });
-                    // ✅ Disable select valves button
-                    const selectBtn = document.getElementById("select-valves-btn");
-                    if (selectBtn) {
-                        selectBtn.classList.add("disabled");
-                        selectBtn.style.opacity = "0.5";
-                        selectBtn.style.pointerEvents = "auto";
-                        selectBtn.onclick = (e) => {
-                            e.preventDefault();
-                            alert("🚫 You are not authorized to select valves.");
-                        };
-                    }
-                    console.warn(`🚫 ${user.email} is not authorized to add fertigation queue.`);
-                }
-                // --- End new permission logic ---
+            // Get current user data
+            let doc = await userRef.get();
+            
+            // If new user, create their profile
+            if (!doc.exists) {
+                console.log("Creating new user profile for:", user.email);
+                const newUser = {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                    role: user.email === "sibhi.gv@gmail.com" ? "admin" : "viewer",
+                    canEditFertigation: user.email === "sibhi.gv@gmail.com",
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await userRef.set(newUser);
+                doc = await userRef.get();
             } else {
-                console.warn("⚠️ No allowed users list found in Firestore.");
-                btn.disabled = true;
-                // Disable all queue control buttons
-                document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
+                // Update profile info
+                const updates = {
+                    lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+                    displayName: user.displayName,
+                    photoURL: user.photoURL
+                };
+                
+                // CRITICAL: Ensure super-admin always has their role correctly set
+                if (user.email === "sibhi.gv@gmail.com") {
+                    updates.role = "admin";
+                    updates.canEditFertigation = true;
+                }
+
+                await userRef.update(updates);
+                doc = await userRef.get(); // Re-fetch to get latest role
             }
+
+            const userData = doc.data();
+            console.log("[Auth] User Profile Synced:", userData.email, "Role:", userData.role);
+
+            // 1. Show/Hide User Permissions sub-tab inside Admin Panel
+            const adminPermNavItem = document.getElementById("admin-permissions-nav-item");
+            if (userData.role === "admin") {
+                if (adminPermNavItem) adminPermNavItem.style.display = "block";
+                loadUserManagement();
+            } else {
+                if (adminPermNavItem) adminPermNavItem.style.display = "none";
+            }
+
+            // 2. Handle Fertigation Permissions
+            if (fertBtn) {
+                if (userData.canEditFertigation || userData.role === "admin") {
+                    enableFertigationControls(fertBtn);
+                } else {
+                    disableFertigationControls(fertBtn, user.email);
+                }
+            }
+
         } catch (err) {
-            console.error("Error checking fertigation permission:", err);
-            btn.disabled = true;
-            // Disable all queue control buttons
-            document.querySelectorAll('#valve-group-queue-list button').forEach(b => b.disabled = true);
+            console.error("Error syncing user profile:", err);
         }
+    }
+
+    function enableFertigationControls(btn) {
+        btn.classList.remove("disabled");
+        btn.style.opacity = "";
+        btn.style.pointerEvents = "";
+        btn.onclick = null;
+        document.querySelectorAll('.queue-control-btn').forEach(b => {
+            b.disabled = false;
+            b.classList.remove("disabled");
+            b.style.opacity = "";
+            b.style.pointerEvents = "";
+            // Ensure listeners are fresh
+            const newB = b.cloneNode(true);
+            b.parentNode.replaceChild(newB, b);
+        });
+        const selectBtn = document.getElementById("select-valves-btn");
+        if (selectBtn) {
+            selectBtn.classList.remove("disabled");
+            selectBtn.style.opacity = "";
+            selectBtn.style.pointerEvents = "";
+            selectBtn.onclick = null;
+        }
+    }
+
+    function disableFertigationControls(btn, email) {
+        btn.classList.add("disabled");
+        btn.style.opacity = "0.5";
+        btn.style.pointerEvents = "auto";
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.onclick = (e) => {
+            e.preventDefault();
+            alert("🚫 You are not authorized to add fertigation queues.");
+        };
+
+        document.querySelectorAll('.queue-control-btn').forEach(b => {
+            b.classList.add("disabled");
+            b.style.opacity = "0.5";
+            b.style.pointerEvents = "auto";
+            const newB = b.cloneNode(true);
+            b.parentNode.replaceChild(newB, b);
+            newB.addEventListener("click", (e) => {
+                e.preventDefault();
+                alert("🚫 You are not authorized to modify the fertigation queue.");
+            });
+        });
+
+        const selectBtn = document.getElementById("select-valves-btn");
+        if (selectBtn) {
+            selectBtn.classList.add("disabled");
+            selectBtn.style.opacity = "0.5";
+            selectBtn.style.pointerEvents = "auto";
+            selectBtn.onclick = (e) => {
+                e.preventDefault();
+                alert("🚫 You are not authorized to select valves.");
+            };
+        }
+    }
+
+    // --- User Management Functions (Super Admin Only) ---
+    async function loadUserManagement() {
+        const listContainer = document.getElementById("authorized-users-list");
+        if (!listContainer) return;
+
+        listContainer.innerHTML = '<tr><td colspan="2" class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Loading Users...</td></tr>';
+
+        try {
+            const snapshot = await db.collection("users").orderBy("email").get();
+            renderUserList(snapshot.docs.map(doc => doc.data()));
+        } catch (err) {
+            console.error("Error loading user management:", err);
+            listContainer.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-3">Error loading users.</td></tr>';
+        }
+    }
+
+    function renderUserList(users) {
+        const listContainer = document.getElementById("authorized-users-list");
+        if (!listContainer) return;
+
+        if (users.length === 0) {
+            listContainer.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">No users found in database.</td></tr>';
+            return;
+        }
+
+        listContainer.innerHTML = users.map(user => `
+            <tr>
+                <td class="text-white">
+                    <div class="d-flex align-items-center">
+                        <img src="${user.photoURL || 'images/user-default.png'}" class="rounded-circle me-2" style="width:24px;height:24px;">
+                        <div>
+                            <div>${user.email} ${user.role === "admin" ? '<span class="badge bg-primary ms-1 small">Admin</span>' : ''}</div>
+                            <div class="extra-small text-muted">${user.displayName || 'Anonymous'}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="text-center">
+                    <div class="form-check form-switch d-inline-block">
+                        <input class="form-check-input" type="checkbox" role="switch" 
+                            ${user.canEditFertigation ? 'checked' : ''} 
+                            ${user.email === "sibhi.gv@gmail.com" ? 'disabled' : ''}
+                            onchange="toggleUserPermission('${user.uid}', this.checked)">
+                    </div>
+                </td>
+            </tr>
+        `).join("");
+    }
+
+    window.toggleUserPermission = async function (uid, isAllowed) {
+        try {
+            await db.collection("users").doc(uid).update({
+                canEditFertigation: isAllowed
+            });
+            console.log(`Updated permission for ${uid}: ${isAllowed}`);
+        } catch (err) {
+            console.error("Error updating permission:", err);
+            alert("Failed to update permission.");
+        }
+    };
+
+    // Form submission for adding users (kept for backward compatibility/manual add)
+    const addPermissionForm = document.getElementById("add-permission-form");
+    if (addPermissionForm) {
+        addPermissionForm.style.display = "none"; // Hide as users are now added automatically on login
     }
 
     // Updated auth state listener for fertigation permission
@@ -113,8 +218,8 @@ document.addEventListener("DOMContentLoaded", () => {
             loginBtn.style.display = "none";
             logoutBtn.style.display = "block";
 
-            // Check fertigation permission
-            await checkFertigationPermission(user);
+            // Sync and handle permissions
+            await syncUserProfile(user);
 
             // Load dashboard when logged in
             fetchAllDashboardData();
@@ -128,6 +233,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             loginBtn.style.display = "block";
             logoutBtn.style.display = "none";
+
+            // Clear all data views
+            clearAllDashboardData();
 
             const btn = document.getElementById("addFertigationBtn");
             if (btn) {
@@ -203,6 +311,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Initialize all module listeners
+    initPressureAnalysisListeners();
+    initFertigationListeners();
+    initEnergyAndAdminListeners();
+
     // Initialize date presets for all date selectors
     setTimeout(() => {
         setupDatePresets();
@@ -222,28 +335,30 @@ document.head.appendChild(momentScript);
 // --- Fetch live data ---
 async function fetchLiveData() {
     const liveContainer = document.getElementById("live-data");
-    const currentTimer = document.getElementById("current-timer");
-    const nextTimer = document.getElementById("next-timer");
-    liveContainer.innerHTML = "";
-    currentTimer.textContent = "";
-    nextTimer.textContent = "";
+    const currentTimer = document.getElementById("dashboard-current-timer");
+    const nextTimer = document.getElementById("dashboard-next-timer");
+    
+    if (liveContainer) liveContainer.innerHTML = "";
+    if (currentTimer) currentTimer.textContent = "Loading...";
+    if (nextTimer) nextTimer.textContent = "Loading...";
 
     const snapshot = await db
         .collection("irrigation_devices")
         .doc("MCON874Q000568")
-        .collection(new Date().toISOString().split("T")[0])
+        .collection(getTodayDate())
         .orderBy("timestamp", "desc")
         .limit(1)
         .get();
 
     if (!snapshot.empty) {
         const data = snapshot.docs[0].data();
-        const live = data.summary.live_data;
+        const live = data.summary?.live_data || {};
 
-        Object.entries(live).forEach(([key, val]) => {
-            const col = document.createElement("div");
-            col.className = "col-md-4";
-            col.innerHTML = `
+        if (liveContainer) {
+            Object.entries(live).forEach(([key, val]) => {
+                const col = document.createElement("div");
+                col.className = "col-md-4";
+                col.innerHTML = `
                 <div class="card h-100">
                     <div class="card-body d-flex flex-column justify-content-center text-center">
                         <h5 class="card-title text-uppercase text-muted" style="font-size: 0.9rem;">
@@ -253,10 +368,13 @@ async function fetchLiveData() {
                     </div>
                 </div>
             `;
-            liveContainer.appendChild(col);
-        });
+                liveContainer.appendChild(col);
+            });
+        }
 
-        const timers = data.summary.timers;
+        const timers = data.summary?.timers || {};
+        if (currentTimer) currentTimer.textContent = timers.current?.name || "Idle";
+        if (nextTimer) nextTimer.textContent = timers.next?.name || "None";
         // Progress bar for current timer
         const currentTimerDuration = parseInt(timers.current.run_time) || 0;
         const currentTimerRemaining = parseInt(timers.current.remaining_time) || 0;
@@ -274,9 +392,9 @@ async function fetchLiveData() {
             </div>
             <small>${currentTimerRemaining} min remaining of ${currentTimerDuration} min</small>
         `;
-        nextTimer.textContent = `${timers.next.name} (On Time: ${timers.next.on_time})`;
+        if (nextTimer) nextTimer.textContent = `${timers.next?.name || "None"} (On Time: ${timers.next?.on_time || "--"})`;
         // Add entrance animation
-        liveContainer.classList.add("animate__animated", "animate__fadeIn");
+        if (liveContainer) liveContainer.classList.add("animate__animated", "animate__fadeIn");
     }
 }
 
@@ -1753,20 +1871,62 @@ async function fetchAllDashboardData() {
         fetchSecondarySupplyMotorStatus(),
         updateAiInsights(),
         generateSmartRecommendation(),
+        loadFertigationHistory(),
+        loadValveQueueFromFirestore(),
     ]);
+}
+
+/**
+ * Clear all UI elements when user logs out.
+ */
+function clearAllDashboardData() {
+    // Clear Live Data & Dashboards
+    const liveData = document.getElementById("live-data");
+    if (liveData) liveData.innerHTML = "";
+    
+    const dashboardTimer = document.getElementById("dashboard-current-timer");
+    if (dashboardTimer) dashboardTimer.textContent = "Please sign in";
+    
+    const dashboardValves = document.getElementById("dashboard-current-valves");
+    if (dashboardValves) dashboardValves.textContent = "";
+
+    const fertStatusText = document.getElementById("fertigation-status-text");
+    if (fertStatusText) fertStatusText.textContent = "Inactive";
+
+    const aiInsights = document.getElementById("ai-insights");
+    if (aiInsights) aiInsights.innerHTML = "Sign in to see system analysis.";
+
+    const adminPermNavItem = document.getElementById("admin-permissions-nav-item");
+    if (adminPermNavItem) adminPermNavItem.style.display = "none";
+
+    // Clear History Tables
+    const fertHistory = document.getElementById("fertigation-history");
+    if (fertHistory) fertHistory.innerHTML = "";
+    
+    const timerHistory = document.getElementById("timer-history-content");
+    if (timerHistory) timerHistory.innerHTML = "";
+
+    // Clear Queues
+    const queueList = document.getElementById("valve-group-queue-list");
+    if (queueList) queueList.innerHTML = "";
+
+    // Reset Charts (if applicable)
+    if (typeof fertigationChart !== "undefined" && fertigationChart) fertigationChart.destroy();
+    if (typeof powerAnalyticsChart !== "undefined" && powerAnalyticsChart) powerAnalyticsChart.destroy();
 }
 
 // Fetch every 5 minutes
 setInterval(fetchAllDashboardData, 5 * 60 * 1000);
 
-document.addEventListener("DOMContentLoaded", () => {
+function initPressureAnalysisListeners() {
     populateTimerDropdown();
-    document
-        .getElementById("fetch-history-btn")
-        .addEventListener("click", fetchTimerHistory);
-    document
-        .getElementById("analyze-pressure-btn")
-        .addEventListener("click", () => {
+    const fetchHistoryBtn = document.getElementById("fetch-history-btn");
+    if (fetchHistoryBtn) {
+        fetchHistoryBtn.addEventListener("click", fetchTimerHistory);
+    }
+    const analyzePressureBtn = document.getElementById("analyze-pressure-btn");
+    if (analyzePressureBtn) {
+        analyzePressureBtn.addEventListener("click", () => {
             const timerName = document.getElementById("pressure-timer-dropdown").value;
             const fromDate = document.getElementById("pressure-from-date").value || getTodayDate();
             const toDate = document.getElementById("pressure-to-date").value || getTodayDate();
@@ -1834,7 +1994,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     );
             }
         });
-});
+    }
+}
 
 // --- Fertigation Management ---
 async function getActiveFertigationLog() {
@@ -1914,15 +2075,20 @@ function listenFertigationStatus() {
 
         updateFertigationStatus(isActive, startTime, notes);
         // Button enable/disable logic
+        const startBtn = document.getElementById("start-fertigation");
+        const stopBtn = document.getElementById("stop-fertigation");
+        const notesInput = document.getElementById("fertigation-notes");
+        const fertForm = document.getElementById("fertigation-form");
+
         if (isActive) {
-            document.getElementById("start-fertigation").disabled = true;
-            document.getElementById("stop-fertigation").disabled = false;
-            document.getElementById("fertigation-notes").disabled = true;
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
+            if (notesInput) notesInput.disabled = true;
         } else {
-            document.getElementById("start-fertigation").disabled = false;
-            document.getElementById("stop-fertigation").disabled = true;
-            document.getElementById("fertigation-notes").disabled = false;
-            document.getElementById("fertigation-form").reset();
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+            if (notesInput) notesInput.disabled = false;
+            if (fertForm) fertForm.reset();
         }
     });
 }
@@ -2231,7 +2397,7 @@ async function loadFertigationHistory(isLoadMore = false) {
 }
 
 // --- Fertigation: Event listeners and real-time updates ---
-document.addEventListener("DOMContentLoaded", () => {
+function initFertigationListeners() {
     // Default chart dates to 1 week initially
     const toDate = new Date();
     const fromDate = new Date();
@@ -2257,7 +2423,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     loadFertigationHistory();
     listenFertigationStatus();
-});
+}
 
 // --- Real-time Firestore listeners for fertigation history and valve queue ---
 db.collection("irrigation_devices")
@@ -2716,7 +2882,7 @@ document.getElementById("load-more-fert-btn")?.addEventListener("click", () => {
     loadFertigationHistory(true);
 });
 
-document.addEventListener("DOMContentLoaded", () => {
+function initEnergyAndAdminListeners() {
     // Initial load will be triggered by tab click
 
     // Default energy date to today
@@ -2739,7 +2905,7 @@ document.addEventListener("DOMContentLoaded", () => {
             setTimeout(() => splash.remove(), 1000);
         }
     }, 2000);
-});
+}
 
 // --- Energy & Power Analytics ---
 let powerAnalyticsChart = null;

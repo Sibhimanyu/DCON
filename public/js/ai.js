@@ -9,8 +9,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!chatInput) return;
 
+    // Start multi-turn chat session with tools
     let chatSession = null;
     let model = null;
+
+    // Listen for auth state changes to enable/disable chat
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            console.log("[AI] User logged in, initializing/enabling chat.");
+            if (!model) initAI();
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            chatInput.placeholder = "Ask Gemini...";
+        } else {
+            console.log("[AI] User logged out, disabling chat.");
+            chatInput.disabled = true;
+            sendBtn.disabled = true;
+            chatInput.placeholder = "Please sign in to chat...";
+            chatSession = null; // Clear session on logout
+        }
+    });
 
     // ——————————————————————————————————————
     // SDK Tool Definitions
@@ -53,9 +71,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ]
         }
     ];
-
-    // Initialize AI service immediately (no API key needed)
-    initAI();
 
     function initAI() {
         try {

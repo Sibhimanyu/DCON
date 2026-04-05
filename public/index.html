@@ -663,41 +663,84 @@
 
         <!-- 6. ADMIN PANEL VIEW -->
         <div class="tab-pane" id="admin-panel">
-          <div class="card">
-            <div class="card-body">
-              <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
-                style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-                <h5 class="card-title m-0"><i class="fas fa-layer-group me-2"></i>Valve Group Configurations</h5>
-                <button class="btn btn-primary" onclick="openCreateValveGroupModal()">
-                  <i class="fas fa-plus me-2"></i>Create Valve Group
-                </button>
+          
+          <!-- Sub-tab Navigation -->
+          <ul class="nav nav-pills mb-4 gap-2" id="admin-sub-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="valve-groups-tab-btn" data-bs-toggle="pill" data-bs-target="#admin-valve-groups" type="button" role="tab">
+                <i class="fas fa-layer-group me-2"></i>Valve Groups
+              </button>
+            </li>
+            <li class="nav-item" role="presentation" id="admin-permissions-nav-item" style="display: none;">
+              <button class="nav-link" id="user-permissions-tab-btn" data-bs-toggle="pill" data-bs-target="#admin-user-permissions" type="button" role="tab">
+                <i class="fas fa-user-shield me-2"></i>User Permissions
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+            <!-- Sub-tab 1: Valve Groups -->
+            <div class="tab-pane fade show active" id="admin-valve-groups" role="tabpanel">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 p-3 rounded-3"
+                    style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                    <h5 class="card-title m-0">Valve Group Configurations</h5>
+                    <button class="btn btn-primary" onclick="openCreateValveGroupModal()">
+                      <i class="fas fa-plus me-2"></i>Create Valve Group
+                    </button>
+                  </div>
+                  <p class="text-muted small mb-4">
+                    Predefined valve groups combine multiple valves into a single logical unit. Only these predetermined
+                    groups can be added to the Active Fertigation Queue.
+                  </p>
+                  <div class="row gy-4" id="admin-valve-groups-grid">
+                    <div class="col-12 text-center py-5 text-muted">
+                      <i class="fas fa-spinner fa-spin fs-2 mb-3"></i><br>Loading configurations...
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p class="text-muted small mb-4">
-                Predefined valve groups combine multiple valves into a single logical unit. Only these predetermined
-                groups can be added to the Active Fertigation Queue to ensure proper pressure regulation.
-              </p>
-              <div class="row gy-4" id="admin-valve-groups-grid">
-                <div class="col-12 text-center py-5 text-muted">
-                  <i class="fas fa-spinner fa-spin fs-2 mb-3"></i><br>Loading configurations...
+            </div>
+
+            <!-- Sub-tab 2: User Permissions (Visible to sibhi) -->
+            <div class="tab-pane fade" id="admin-user-permissions" role="tabpanel">
+              <div class="card">
+                <div class="card-body">
+                  <div class="d-flex align-items-center mb-4 p-3 rounded-3"
+                    style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                    <h5 class="card-title m-0">Manage User Access</h5>
+                  </div>
+                  <p class="text-muted small mb-4">
+                    Grant or revoke permissions for users who have accessed the system.
+                  </p>
+                  <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                      <thead>
+                        <tr>
+                          <th class="text-muted small text-uppercase">User Profile</th>
+                          <th class="text-center text-muted small text-uppercase" style="width: 150px;">Fertigation Access</th>
+                        </tr>
+                      </thead>
+                      <tbody id="authorized-users-list">
+                        <!-- Loaded via JS -->
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- AI Integrated Card -->
+          <!-- AI Integrated Card (Always at bottom of Admin) -->
           <div class="card mt-4">
             <div class="card-body">
               <div class="d-flex align-items-center mb-3 p-3 rounded-3"
                 style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-                <h5 class="card-title m-0"><i class="fas fa-robot me-2" style="color:var(--accent-teal);"></i>AI
-                  Assistant
-                  Status</h5>
+                <h5 class="card-title m-0"><i class="fas fa-robot me-2" style="color:var(--accent-teal);"></i>AI Status</h5>
               </div>
               <p class="text-muted small mb-0">
-                The AI Assistant is integrated with Firebase AI Logic and the <strong
-                  style="color:var(--accent-teal);">Gemini
-                  3</strong> model.
-                No manual API key is required as it uses your secure Firebase project credentials.
+                The AI Assistant is integrated with Firebase AI Logic and the <strong style="color:var(--accent-teal);">Gemini 3</strong> model.
               </p>
             </div>
           </div>
@@ -790,6 +833,7 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const navBtns = document.querySelectorAll('.nav-item-btn');
+      console.log("[Navigation] Initialized with", navBtns.length, "buttons.");
       const tabPanes = document.querySelectorAll('.tab-pane');
       const pageTitle = document.getElementById('current-page-title');
       const sidebar = document.getElementById('sidebar');
